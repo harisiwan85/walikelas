@@ -2,12 +2,13 @@ node_modules/
 .svelte-kit/
 .vercel/
 build/
-data/
+/data/
 *.log
 .env
 .env.*
 !.env.example
 .DS_Store
 *.zip
+
 
 
