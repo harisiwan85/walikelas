@@ -8,47 +8,74 @@
 	let { data }: { data: { subjects: Subject[]; teachers: Teacher[]; classes: ClassRow[] } } = $props();
 	const { subjects: initial, teachers, classes } = data;
 
-	let subjects = $state<Subject[]>(initial);
-	let showModal = $state(false);
-	let editing = $state<Subject | null>(null);
-	let form = $state({ kode: '', nama: '', teacher_id: '' as number | string, class_ids: [] as number[] });
+		let subjects = $state<Subject[]>(initial);
+		let showModal = $state(false);
+		let editing = $state<Subject | null>(null);
+		let form = $state<{ kode: string; nama: string; teacher_ids: number[]; class_ids: number[] }>({
+			kode: '',
+			nama: '',
+			teacher_ids: [],
+			class_ids: []
+		});
 
-	function openAdd() {
-		editing = null;
-		form = { kode: '', nama: '', teacher_id: '', class_ids: [] };
-		showModal = true;
-	}
-
-	function openEdit(s: Subject) {
-		editing = s;
-		form = { kode: s.kode, nama: s.nama, teacher_id: s.teacher_id ?? '', class_ids: s.classes.map((c) => c.id) };
-		showModal = true;
-	}
-
-	function toggleClass(cid: number) {
-		form.class_ids = form.class_ids.includes(cid) ? form.class_ids.filter((x) => x !== cid) : [...form.class_ids, cid];
-	}
-
-	async function refresh() {
-		subjects = await api<Subject[]>('/api/subjects');
-	}
-
-	async function submit() {
-		try {
-			const body = { ...form, teacher_id: form.teacher_id === '' ? null : Number(form.teacher_id) };
-			if (editing) {
-				await api(`/api/subjects/${editing.id}`, { method: 'PUT', body: JSON.stringify(body) });
-				toast('Mata pelajaran diperbarui');
-			} else {
-				await api('/api/subjects', { method: 'POST', body: JSON.stringify(body) });
-				toast('Mata pelajaran ditambahkan');
-			}
-			showModal = false;
-			await refresh();
-		} catch (e: any) {
-			toast(e.message, 'error');
+		function openAdd() {
+			editing = null;
+			form = { kode: '', nama: '', teacher_ids: [], class_ids: [] };
+			showModal = true;
 		}
-	}
+
+		function openEdit(s: Subject) {
+			editing = s;
+			const tids = s.teacher_ids && s.teacher_ids.length
+				? s.teacher_ids
+				: s.teacher_id
+				? [s.teacher_id]
+				: [];
+			form = {
+				kode: s.kode,
+				nama: s.nama,
+				teacher_ids: tids,
+				class_ids: s.classes.map((c) => c.id)
+			};
+			showModal = true;
+		}
+
+		function toggleTeacher(tid: number) {
+			form.teacher_ids = form.teacher_ids.includes(tid)
+				? form.teacher_ids.filter((x) => x !== tid)
+				: [...form.teacher_ids, tid];
+		}
+
+		function toggleClass(cid: number) {
+			form.class_ids = form.class_ids.includes(cid) ? form.class_ids.filter((x) => x !== cid) : [...form.class_ids, cid];
+		}
+
+		async function refresh() {
+			subjects = await api<Subject[]>('/api/subjects');
+		}
+
+		async function submit() {
+			try {
+				const body = {
+					kode: form.kode,
+					nama: form.nama,
+					teacher_id: form.teacher_ids[0] ?? null,
+					teacher_ids: form.teacher_ids,
+					class_ids: form.class_ids
+				};
+				if (editing) {
+					await api(`/api/subjects/${editing.id}`, { method: 'PUT', body: JSON.stringify(body) });
+					toast('Mata pelajaran diperbarui');
+				} else {
+					await api('/api/subjects', { method: 'POST', body: JSON.stringify(body) });
+					toast('Mata pelajaran ditambahkan');
+				}
+				showModal = false;
+				await refresh();
+			} catch (e: any) {
+				toast(e.message, 'error');
+			}
+		}
 
 	async function hapus(s: Subject) {
 		if (!confirm(`Hapus mata pelajaran ${s.nama}?`)) return;
@@ -120,15 +147,22 @@
 				<input class="w-full" bind:value={form.nama} />
 			</div>
 		</div>
-		<div>
-			<label class="label">Guru Pengampu</label>
-			<select class="w-full" bind:value={form.teacher_id}>
-				<option value="">— Pilih guru —</option>
-				{#each teachers as t}
-					<option value={t.id}>{t.nama}</option>
-				{/each}
-			</select>
-		</div>
+			<div>
+				<label class="label">Guru Pengampu (Bisa pilih lebih dari 1)</label>
+				<div class="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
+					{#each teachers as t}
+						<button
+							type="button"
+							class="px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer {form.teacher_ids.includes(t.id)
+								? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+								: 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'}"
+							onclick={() => toggleTeacher(t.id)}
+						>
+							{#if form.teacher_ids.includes(t.id)}✓ {/if}{t.nama}
+						</button>
+					{/each}
+				</div>
+			</div>
 		<div>
 			<label class="label">Kelas yang Diajar</label>
 			<div class="flex flex-wrap gap-2">

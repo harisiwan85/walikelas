@@ -23,10 +23,16 @@ export const POST: RequestHandler = async (event) => {
 	await requireRole(event, ['admin']);
 	const body = await event.request.json().catch(() => null);
 	if (!body?.nama) throw error(400, 'Nama mata pelajaran wajib diisi');
+	const teacherIds = Array.isArray(body.teacher_ids)
+		? body.teacher_ids.map(Number)
+		: body.teacher_id
+		? [Number(body.teacher_id)]
+		: [];
 	const id = await createSubject({
 		kode: String(body.kode ?? ''),
 		nama: String(body.nama),
-		teacher_id: body.teacher_id ? Number(body.teacher_id) : null,
+		teacher_id: teacherIds[0] ?? null,
+		teacher_ids: teacherIds,
 		class_ids: Array.isArray(body.class_ids) ? body.class_ids.map(Number) : []
 	});
 	return json({ id }, { status: 201 });

@@ -363,17 +363,42 @@ export function getSubjects(): Subject[] {
 		if (!bySubject.has(r.subject_id)) bySubject.set(r.subject_id, []);
 		bySubject.get(r.subject_id)!.push({ id: r.id, nama: r.nama });
 	}
-	return rows.map((r) => ({ ...r, classes: bySubject.get(r.id) ?? [] })) as Subject[];
+
+	const teacherRows = db
+		.prepare(
+			`SELECT st.subject_id, t.id, t.nama FROM subject_teachers st
+       JOIN teachers t ON t.id = st.teacher_id ORDER BY t.nama`
+		)
+		.all() as any[];
+	const teachersBySubj = new Map<number, { id: number; nama: string }[]>();
+	for (const r of teacherRows) {
+		if (!teachersBySubj.has(r.subject_id)) teachersBySubj.set(r.subject_id, []);
+		teachersBySubj.get(r.subject_id)!.push({ id: r.id, nama: r.nama });
+	}
+
+	return rows.map((r) => {
+		const list = teachersBySubj.get(r.id) ?? (r.teacher_id ? [{ id: r.teacher_id, nama: r.teacher_nama ?? '' }] : []);
+		return {
+			...r,
+			teacher_ids: list.map((t) => t.id),
+			teachers: list,
+			teacher_nama: list.map((t) => t.nama).join(', ') || r.teacher_nama || null,
+			classes: bySubject.get(r.id) ?? []
+		};
+	}) as Subject[];
 }
 
 export function getTeacherSubjects(teacherId: number): Subject[] {
 	const rows = db
 		.prepare(
-			`SELECT s.id, s.kode, s.nama, s.teacher_id, t.nama AS teacher_nama
-       FROM subjects s LEFT JOIN teachers t ON t.id = s.teacher_id
-       WHERE s.teacher_id = ? ORDER BY s.nama`
+			`SELECT DISTINCT s.id, s.kode, s.nama, s.teacher_id, t.nama AS teacher_nama
+       FROM subjects s
+       LEFT JOIN teachers t ON t.id = s.teacher_id
+       LEFT JOIN subject_teachers st ON st.subject_id = s.id
+       WHERE s.teacher_id = ? OR st.teacher_id = ?
+       ORDER BY s.nama`
 		)
-		.all(teacherId) as any[];
+		.all(teacherId, teacherId) as any[];
 	return rows.map((r) => ({ ...r, classes: [] })) as Subject[];
 }
 
@@ -386,10 +411,11 @@ export function getClassesForTeacher(teacherId: number): ClassRow[] {
        FROM subjects s
        JOIN subject_classes sc ON sc.subject_id = s.id
        JOIN classes c ON c.id = sc.class_id
+       LEFT JOIN subject_teachers st ON st.subject_id = s.id
        LEFT JOIN teachers t ON t.id = c.wali_kelas_id
-       WHERE s.teacher_id = ? ORDER BY c.tingkat, c.nama`
+       WHERE s.teacher_id = ? OR st.teacher_id = ? ORDER BY c.tingkat, c.nama`
 		)
-		.all(teacherId) as ClassRow[];
+		.all(teacherId, teacherId) as ClassRow[];
 }
 
 /** Mapel yang diajarkan di sebuah kelas. */
@@ -403,36 +429,79 @@ export function getSubjectsForClass(classId: number): Subject[] {
        WHERE sc.class_id = ? ORDER BY s.nama`
 		)
 		.all(classId) as any[];
-	return rows.map((r) => ({ ...r, classes: [] })) as Subject[];
+
+	const teacherRows = db
+		.prepare(
+			`SELECT st.subject_id, t.id, t.nama FROM subject_teachers st
+       JOIN teachers t ON t.id = st.teacher_id ORDER BY t.nama`
+		)
+		.all() as any[];
+	const teachersBySubj = new Map<number, { id: number; nama: string }[]>();
+	for (const r of teacherRows) {
+		if (!teachersBySubj.has(r.subject_id)) teachersBySubj.set(r.subject_id, []);
+		teachersBySubj.get(r.subject_id)!.push({ id: r.id, nama: r.nama });
+	}
+
+	return rows.map((r) => {
+		const list = teachersBySubj.get(r.id) ?? (r.teacher_id ? [{ id: r.teacher_id, nama: r.teacher_nama ?? '' }] : []);
+		return {
+			...r,
+			teacher_ids: list.map((t) => t.id),
+			teachers: list,
+			teacher_nama: list.map((t) => t.nama).join(', ') || r.teacher_nama || null,
+			classes: []
+		};
+	}) as Subject[];
 }
 
-export function createSubject(data: { kode: string; nama: string; teacher_id: number | null; class_ids: number[] }) {
+export function createSubject(data: { kode: string; nama: string; teacher_id: number | null; teacher_ids?: number[]; class_ids: number[] }) {
+	const primaryTeacherId = data.teacher_ids && data.teacher_ids.length ? data.teacher_ids[0] : data.teacher_id;
 	const tx = db.transaction(() => {
 		const res = db
 			.prepare('INSERT INTO subjects (kode, nama, teacher_id) VALUES (?,?,?)')
-			.run(data.kode ?? '', data.nama, data.teacher_id);
+			.run(data.kode ?? '', data.nama, primaryTeacherId);
 		const id = Number(res.lastInsertRowid);
-		const ins = db.prepare('INSERT INTO subject_classes (subject_id, class_id) VALUES (?,?)');
-		for (const cid of data.class_ids ?? []) ins.run(id, cid);
+		const insClass = db.prepare('INSERT INTO subject_classes (subject_id, class_id) VALUES (?,?)');
+		for (const cid of data.class_ids ?? []) insClass.run(id, cid);
+
+		const allTeacherIds = data.teacher_ids && data.teacher_ids.length
+			? data.teacher_ids
+			: primaryTeacherId
+			? [primaryTeacherId]
+			: [];
+		const insTeacher = db.prepare('INSERT OR IGNORE INTO subject_teachers (subject_id, teacher_id) VALUES (?,?)');
+		for (const tid of allTeacherIds) insTeacher.run(id, tid);
+
 		return id;
 	});
 	return tx();
 }
 
-export function updateSubject(id: number, data: Partial<Subject>) {
+export function updateSubject(id: number, data: Partial<Subject> & { teacher_ids?: number[]; class_ids?: number[] }) {
 	const cur = db.prepare('SELECT * FROM subjects WHERE id=?').get(id) as any;
 	if (!cur) throw new Error('Mata pelajaran tidak ditemukan');
+	const primaryTeacherId = data.teacher_ids !== undefined
+		? (data.teacher_ids[0] ?? null)
+		: (data.teacher_id !== undefined ? data.teacher_id : cur.teacher_id);
+
 	const tx = db.transaction(() => {
 		db.prepare('UPDATE subjects SET kode=?, nama=?, teacher_id=? WHERE id=?').run(
 			data.kode ?? cur.kode,
 			data.nama ?? cur.nama,
-			data.teacher_id !== undefined ? data.teacher_id : cur.teacher_id,
+			primaryTeacherId,
 			id
 		);
-		if (data.classes) {
+		if (data.classes || data.class_ids) {
 			db.prepare('DELETE FROM subject_classes WHERE subject_id=?').run(id);
 			const ins = db.prepare('INSERT INTO subject_classes (subject_id, class_id) VALUES (?,?)');
-			for (const c of data.classes) ins.run(id, c.id);
+			const cids = data.class_ids ?? (data.classes ?? []).map((c) => c.id);
+			for (const cid of cids) ins.run(id, cid);
+		}
+		if (data.teacher_ids !== undefined || data.teachers !== undefined) {
+			db.prepare('DELETE FROM subject_teachers WHERE subject_id=?').run(id);
+			const ins = db.prepare('INSERT OR IGNORE INTO subject_teachers (subject_id, teacher_id) VALUES (?,?)');
+			const tids = data.teacher_ids ?? (data.teachers ?? []).map((t) => t.id);
+			for (const tid of tids) ins.run(id, tid);
 		}
 	});
 	tx();

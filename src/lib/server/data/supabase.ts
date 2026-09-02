@@ -496,35 +496,92 @@ export async function getSubjects(): Promise<Subject[]> {
 		if (!bySubject.has(r.subject_id)) bySubject.set(r.subject_id, []);
 		bySubject.get(r.subject_id)!.push({ id: cls.id, nama: cls.nama });
 	}
-	return (data ?? []).map((s: any) => ({
-		id: s.id,
-		kode: s.kode,
-		nama: s.nama,
-		teacher_id: s.teacher_id,
-		teacher_nama: s.teachers?.nama ?? null,
-		classes: bySubject.get(s.id) ?? []
-	})) as Subject[];
+
+	let st: any[] | null = null;
+	try {
+		const res = await sb().from('subject_teachers').select('subject_id, teachers(id, nama)');
+		st = res.data;
+	} catch (_) {}
+
+	const teachersBySubj = new Map<number, { id: number; nama: string }[]>();
+	for (const r of st ?? []) {
+		const tch: any = Array.isArray(r.teachers) ? r.teachers[0] : r.teachers;
+		if (!tch) continue;
+		if (!teachersBySubj.has(r.subject_id)) teachersBySubj.set(r.subject_id, []);
+		teachersBySubj.get(r.subject_id)!.push({ id: tch.id, nama: tch.nama });
+	}
+
+	return (data ?? []).map((s: any) => {
+		const list = teachersBySubj.get(s.id) ?? (s.teacher_id ? [{ id: s.teacher_id, nama: (Array.isArray(s.teachers) ? s.teachers[0]?.nama : s.teachers?.nama) ?? '' }] : []);
+		return {
+			id: s.id,
+			kode: s.kode,
+			nama: s.nama,
+			teacher_id: s.teacher_id,
+			teacher_ids: list.map((t) => t.id),
+			teachers: list,
+			teacher_nama: list.map((t) => t.nama).join(', ') || (Array.isArray(s.teachers) ? s.teachers[0]?.nama : s.teachers?.nama) || null,
+			classes: bySubject.get(s.id) ?? []
+		};
+	}) as Subject[];
 }
 
 export async function getTeacherSubjects(teacherId: number): Promise<Subject[]> {
-	const { data } = await sb()
+	const { data: direct } = await sb()
 		.from('subjects')
 		.select('id, kode, nama, teacher_id, teachers!subjects_teacher_id_fkey(nama)')
 		.eq('teacher_id', teacherId)
 		.order('nama');
-	return (data ?? []).map((s: any) => ({
-		id: s.id,
-		kode: s.kode,
-		nama: s.nama,
-		teacher_id: s.teacher_id,
-		teacher_nama: s.teachers?.nama ?? null,
-		classes: []
-	})) as Subject[];
+
+	let st: any[] | null = null;
+	try {
+		const res = await sb()
+			.from('subject_teachers')
+			.select('subject_id, subjects(id, kode, nama, teacher_id, teachers!subjects_teacher_id_fkey(nama))')
+			.eq('teacher_id', teacherId);
+		st = res.data;
+	} catch (_) {}
+
+	const seen = new Map<number, Subject>();
+	for (const s of direct ?? []) {
+		const tch: any = Array.isArray(s.teachers) ? s.teachers[0] : s.teachers;
+		seen.set(s.id, {
+			id: s.id,
+			kode: s.kode,
+			nama: s.nama,
+			teacher_id: s.teacher_id,
+			teacher_nama: tch?.nama ?? null,
+			classes: []
+		});
+	}
+	for (const r of st ?? []) {
+		const s: any = r.subjects;
+		if (s) {
+			const tch: any = Array.isArray(s.teachers) ? s.teachers[0] : s.teachers;
+			seen.set(s.id, {
+				id: s.id,
+				kode: s.kode,
+				nama: s.nama,
+				teacher_id: s.teacher_id,
+				teacher_nama: tch?.nama ?? null,
+				classes: []
+			});
+		}
+	}
+	return [...seen.values()].sort((a, b) => a.nama.localeCompare(b.nama));
 }
 
 export async function getClassesForTeacher(teacherId: number): Promise<ClassRow[]> {
 	const { data: subjectRows } = await sb().from('subjects').select('id').eq('teacher_id', teacherId);
-	const subjectIds = (subjectRows ?? []).map((r) => r.id);
+	let stRows: any[] | null = null;
+	try {
+		const res = await sb().from('subject_teachers').select('subject_id').eq('teacher_id', teacherId);
+		stRows = res.data;
+	} catch (_) {}
+	const subjectIds = [
+		...(subjectRows ?? []).map((r: any) => r.id),
+		...(stRows ?? []).map((r: any) => r.subject_id)
+	];
 	if (!subjectIds.length) return [];
 	const { data: sc } = await sb().from('subject_classes').select('class_id').in('subject_id', subjectIds);
 	const classIds = [...new Set((sc ?? []).map((r) => r.class_id))];
@@ -536,52 +593,100 @@ export async function getSubjectsForClass(classId: number): Promise<Subject[]> {
 		.from('subject_classes')
 		.select('subjects(id, kode, nama, teacher_id, teachers!subjects_teacher_id_fkey(nama))')
 		.eq('class_id', classId);
+
+	let st: any[] | null = null;
+	try {
+		const res = await sb().from('subject_teachers').select('subject_id, teachers(id, nama)');
+		st = res.data;
+	} catch (_) {}
+
+	const teachersBySubj = new Map<number, { id: number; nama: string }[]>();
+	for (const r of st ?? []) {
+		const tch: any = Array.isArray(r.teachers) ? r.teachers[0] : r.teachers;
+		if (!tch) continue;
+		if (!teachersBySubj.has(r.subject_id)) teachersBySubj.set(r.subject_id, []);
+		teachersBySubj.get(r.subject_id)!.push({ id: tch.id, nama: tch.nama });
+	}
+
 	const seen = new Map<number, Subject>();
 	for (const r of data ?? []) {
 		const s: any = r.subjects;
 		if (!s) continue;
+		const list = teachersBySubj.get(s.id) ?? (s.teacher_id ? [{ id: s.teacher_id, nama: (Array.isArray(s.teachers) ? s.teachers[0]?.nama : s.teachers?.nama) ?? '' }] : []);
 		seen.set(s.id, {
 			id: s.id,
 			kode: s.kode,
 			nama: s.nama,
 			teacher_id: s.teacher_id,
-			teacher_nama: s.teachers?.nama ?? null,
+			teacher_ids: list.map((t) => t.id),
+			teachers: list,
+			teacher_nama: list.map((t) => t.nama).join(', ') || (Array.isArray(s.teachers) ? s.teachers[0]?.nama : s.teachers?.nama) || null,
 			classes: []
 		});
 	}
 	return [...seen.values()].sort((a, b) => a.nama.localeCompare(b.nama));
 }
 
-export async function createSubject(data: { kode: string; nama: string; teacher_id: number | null; class_ids: number[] }) {
+export async function createSubject(data: { kode: string; nama: string; teacher_id: number | null; teacher_ids?: number[]; class_ids: number[] }) {
+	const primaryTeacherId = data.teacher_ids && data.teacher_ids.length ? data.teacher_ids[0] : data.teacher_id;
 	const { data: row, error } = await sb()
 		.from('subjects')
-		.insert({ kode: data.kode ?? '', nama: data.nama, teacher_id: data.teacher_id })
+		.insert({ kode: data.kode ?? '', nama: data.nama, teacher_id: primaryTeacherId })
 		.select('id')
 		.single();
 	if (error) throw new Error(error.message);
 	for (const cid of data.class_ids ?? []) {
 		await sb().from('subject_classes').insert({ subject_id: row.id, class_id: cid });
 	}
+
+	const allTeacherIds = data.teacher_ids && data.teacher_ids.length
+		? data.teacher_ids
+		: primaryTeacherId
+		? [primaryTeacherId]
+		: [];
+	for (const tid of allTeacherIds) {
+		try {
+			await sb().from('subject_teachers').insert({ subject_id: row.id, teacher_id: tid });
+		} catch (_) {}
+	}
 	return row.id;
 }
 
-export async function updateSubject(id: number, data: Partial<Subject>) {
+export async function updateSubject(id: number, data: Partial<Subject> & { teacher_ids?: number[]; class_ids?: number[] }) {
 	const { data: cur } = await sb().from('subjects').select('*').eq('id', id).limit(1);
 	if (!cur || cur.length === 0) throw new Error('Mata pelajaran tidak ditemukan');
 	const c: any = cur[0];
+	const primaryTeacherId = data.teacher_ids !== undefined
+		? (data.teacher_ids[0] ?? null)
+		: (data.teacher_id !== undefined ? data.teacher_id : c.teacher_id);
+
 	const { error } = await sb()
 		.from('subjects')
 		.update({
 			kode: data.kode ?? c.kode,
 			nama: data.nama ?? c.nama,
-			teacher_id: data.teacher_id !== undefined ? data.teacher_id : c.teacher_id
+			teacher_id: primaryTeacherId
 		})
 		.eq('id', id);
 	if (error) throw new Error(error.message);
-	if (data.classes) {
+
+	if (data.classes || data.class_ids) {
 		await sb().from('subject_classes').delete().eq('subject_id', id);
-		for (const c2 of data.classes) {
-			await sb().from('subject_classes').insert({ subject_id: id, class_id: c2.id });
+		const cids = data.class_ids ?? (data.classes ?? []).map((c2) => c2.id);
+		for (const cid of cids) {
+			await sb().from('subject_classes').insert({ subject_id: id, class_id: cid });
+		}
+	}
+
+	if (data.teacher_ids !== undefined || data.teachers !== undefined) {
+		try {
+			await sb().from('subject_teachers').delete().eq('subject_id', id);
+		} catch (_) {}
+		const tids = data.teacher_ids ?? (data.teachers ?? []).map((t) => t.id);
+		for (const tid of tids) {
+			try {
+				await sb().from('subject_teachers').insert({ subject_id: id, teacher_id: tid });
+			} catch (_) {}
 		}
 	}
 }

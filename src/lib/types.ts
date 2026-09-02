@@ -105,6 +105,8 @@ export interface Subject {
 	nama: string;
 	teacher_id: number | null;
 	teacher_nama: string | null;
+	teacher_ids?: number[];
+	teachers?: { id: number; nama: string }[];
 	classes: { id: number; nama: string }[];
 }
 

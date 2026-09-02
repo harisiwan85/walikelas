@@ -90,6 +90,14 @@ export async function getDb() {
 	  FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
 	);
 
+	CREATE TABLE IF NOT EXISTS subject_teachers (
+	  subject_id INTEGER NOT NULL,
+	  teacher_id INTEGER NOT NULL,
+	  PRIMARY KEY (subject_id, teacher_id),
+	  FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+	  FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
+	);
+
 	CREATE TABLE IF NOT EXISTS users (
 	  id INTEGER PRIMARY KEY AUTOINCREMENT,
 	  auth_id TEXT,
