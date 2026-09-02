@@ -13,19 +13,6 @@
 	let loading = $state(false);
 	let errorMsg = $state('');
 
-	const demo = [
-		{ label: 'Admin', username: 'admin', password: 'admin123', icon: 'shield', desc: 'Kelola data & akun' },
-		{ label: 'Wali Kelas', username: 'siti', password: 'wali123', icon: 'siswa', desc: 'Input absensi 7A' },
-		{ label: 'Kepala Sekolah', username: 'kepala', password: 'kepala123', icon: 'sekolah', desc: 'Pantau semua kelas' },
-		{ label: 'Guru Mapel', username: 'anto', password: 'guru123', icon: 'mapel', desc: 'Absensi per jam' }
-	];
-
-	function fill(d: (typeof demo)[number]) {
-		identifier = d.username;
-		password = d.password;
-		errorMsg = '';
-	}
-
 	async function submit() {
 		loading = true;
 		errorMsg = '';
@@ -129,31 +116,11 @@
 							</button>
 						</div>
 					</div>
-					<button type="submit" class="btn-primary w-full justify-center" disabled={loading}>
-						{#if loading}Memproses...{:else}<Icon name="logout" class="w-4 h-4" /> Masuk{/if}
-					</button>
-				</form>
-
-				<div class="mt-6 pt-5 border-t border-slate-200">
-					<div class="text-xs font-semibold text-slate-600 mb-2">Akun demo — klik untuk mengisi:</div>
-					<div class="grid grid-cols-2 gap-2">
-						{#each demo as d}
-							<button
-								type="button"
-								class="text-left bg-slate-50 hover:bg-indigo-50 hover:ring-1 hover:ring-indigo-200 rounded-xl p-2.5 transition-colors cursor-pointer"
-								onclick={() => fill(d)}
-							>
-								<div class="flex items-center gap-2">
-									<span class="w-6 h-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center"><Icon name={d.icon} class="w-3.5 h-3.5" /></span>
-									<span class="text-xs font-semibold text-slate-800">{d.label}</span>
-								</div>
-								<div class="text-[11px] text-slate-500 mt-1">{d.desc}</div>
-								<div class="text-[10px] text-slate-400 font-mono mt-0.5">{d.username} • {d.password}</div>
-							</button>
-						{/each}
-					</div>
+						<button type="submit" class="btn-primary w-full justify-center" disabled={loading}>
+							{#if loading}Memproses...{:else}<Icon name="logout" class="w-4 h-4" /> Masuk{/if}
+						</button>
+					</form>
 				</div>
 			</div>
 		</div>
 	</div>
-</div>
