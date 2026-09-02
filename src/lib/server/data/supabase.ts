@@ -397,7 +397,7 @@ export async function getTeachers(): Promise<Teacher[]> {
 	}) as Teacher[];
 }
 
-export async function createTeacher(data: Omit<Teacher, 'id'>) {
+export async function createTeacher(data: Omit<Teacher, 'id'> & { foto_url?: string }) {
 	const school = await getSchool();
 	const row: Record<string, unknown> = {
 		school_id: school.id,
@@ -410,10 +410,17 @@ export async function createTeacher(data: Omit<Teacher, 'id'>) {
 	if (await ensureTeachersKode()) row.kode = data.kode ?? '';
 	const { data: created, error } = await sb().from('teachers').insert(row).select('id').single();
 	if (error) throw new Error(error.message);
+
+	if (data.foto_url) {
+		const { getOrCreateTeacherAccount } = await import('$lib/server/accounts');
+		const acc = await getOrCreateTeacherAccount({ id: created.id, ...data } as any);
+		await authSetProfile(acc.id, data.nama, data.foto_url);
+	}
+
 	return { lastInsertRowid: created.id };
 }
 
-export async function updateTeacher(id: number, data: Partial<Teacher>) {
+export async function updateTeacher(id: number, data: Partial<Teacher> & { foto_url?: string }) {
 	const { data: cur } = await sb().from('teachers').select('*').eq('id', id).limit(1);
 	if (!cur || cur.length === 0) throw new Error('Guru tidak ditemukan');
 	const c: any = cur[0];
@@ -428,20 +435,27 @@ export async function updateTeacher(id: number, data: Partial<Teacher>) {
 	const { error } = await sb().from('teachers').update(patch).eq('id', id);
 	if (error) throw new Error(error.message);
 
-	// Nama & jabatan di halaman Data Guru ikut disinkronkan ke akun login
-	const { data: account } = await sb().from('users').select('id, auth_id').eq('teacher_id', id).limit(1);
+	// Nama, jabatan, dan foto di halaman Data Guru ikut disinkronkan ke akun login
+	let { data: account } = await sb().from('users').select('id, auth_id, foto_url').eq('teacher_id', id).limit(1);
+	if ((!account || account.length === 0) && data.foto_url) {
+		const { getOrCreateTeacherAccount } = await import('$lib/server/accounts');
+		await getOrCreateTeacherAccount({ id, ...c, ...data } as any);
+		const res = await sb().from('users').select('id, auth_id, foto_url').eq('teacher_id', id).limit(1);
+		account = res.data;
+	}
+
 	if (account && account.length > 0) {
-		if (data.nama) {
-			await sb().from('users').update({ name: data.nama }).eq('teacher_id', id);
-		}
-		if (data.jabatan) {
-			await sb().from('users').update({ role: data.jabatan }).eq('teacher_id', id);
-		}
+		const userPatch: any = {};
+		if (data.nama) userPatch.name = data.nama;
+		if (data.jabatan) userPatch.role = data.jabatan;
+		if (data.foto_url !== undefined) userPatch.foto_url = data.foto_url;
+		await sb().from('users').update(userPatch).eq('teacher_id', id);
 		if (account[0].auth_id) {
 			await sb().auth.admin.updateUserById(account[0].auth_id, {
 				user_metadata: {
 					...(data.nama ? { name: data.nama } : {}),
-					...(data.jabatan ? { role: data.jabatan } : {})
+					...(data.jabatan ? { role: data.jabatan } : {}),
+					...(data.foto_url !== undefined ? { foto_url: data.foto_url } : {})
 				}
 			});
 		}

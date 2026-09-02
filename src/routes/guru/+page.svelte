@@ -8,36 +8,63 @@
 	let { data }: { data: { teachers: Teacher[] } } = $props();
 	const { teachers: initial } = data;
 
-	let teachers = $state<Teacher[]>(initial);
-	let q = $state('');
-	let showModal = $state(false);
-	let editing = $state<Teacher | null>(null);
-	let form = $state({ kode: '', nip: '', nuptk: '', nama: '', jabatan: 'guru_mapel', kontak: '' });
+		let teachers = $state<Teacher[]>(initial);
+		let q = $state('');
+		let showModal = $state(false);
+		let editing = $state<Teacher | null>(null);
+		let form = $state<{ kode: string; nip: string; nuptk: string; nama: string; jabatan: string; kontak: string; foto_url: string }>({
+			kode: '',
+			nip: '',
+			nuptk: '',
+			nama: '',
+			jabatan: 'guru_mapel',
+			kontak: '',
+			foto_url: ''
+		});
+		let uploadingFoto = $state(false);
 
-	// --- kelola akun ---
-	let showAccount = $state(false);
-	let accountTeacher = $state<Teacher | null>(null);
-	let accForm = $state({ username: '', email: '', password: '', role: 'guru_mapel' });
-	let accBusy = $state(false);
+		// --- kelola akun ---
+		let showAccount = $state(false);
+		let accountTeacher = $state<Teacher | null>(null);
+		let accForm = $state({ username: '', email: '', password: '', role: 'guru_mapel' });
+		let accBusy = $state(false);
 
-	const jabatanLabel = (j: string) =>
-		j === 'admin' ? 'Admin TU' : j === 'kepala_sekolah' ? 'Kepala Sekolah' : j === 'wali_kelas' ? 'Wali Kelas' : 'Guru Mapel';
+		const jabatanLabel = (j: string) =>
+			j === 'admin' ? 'Admin TU' : j === 'kepala_sekolah' ? 'Kepala Sekolah' : j === 'wali_kelas' ? 'Wali Kelas' : 'Guru Mapel';
 
-	let filtered = $derived(
-		teachers.filter((t) => !q || t.nama.toLowerCase().includes(q.toLowerCase()) || t.nip.includes(q) || t.kode.toLowerCase().includes(q.toLowerCase()))
-	);
+		let filtered = $derived(
+			teachers.filter((t) => !q || t.nama.toLowerCase().includes(q.toLowerCase()) || t.nip.includes(q) || t.kode.toLowerCase().includes(q.toLowerCase()))
+		);
 
-	function openAdd() {
-		editing = null;
-		form = { kode: '', nip: '', nuptk: '', nama: '', jabatan: 'guru_mapel', kontak: '' };
-		showModal = true;
-	}
+		function openAdd() {
+			editing = null;
+			form = { kode: '', nip: '', nuptk: '', nama: '', jabatan: 'guru_mapel', kontak: '', foto_url: '' };
+			showModal = true;
+		}
 
-	function openEdit(t: Teacher) {
-		editing = t;
-		form = { kode: t.kode, nip: t.nip, nuptk: t.nuptk, nama: t.nama, jabatan: t.jabatan, kontak: t.kontak };
-		showModal = true;
-	}
+		function openEdit(t: Teacher) {
+			editing = t;
+			form = { kode: t.kode, nip: t.nip, nuptk: t.nuptk, nama: t.nama, jabatan: t.jabatan, kontak: t.kontak, foto_url: t.foto_url ?? '' };
+			showModal = true;
+		}
+
+		async function uploadFotoGuru(file: File | null) {
+			if (!file) return;
+			uploadingFoto = true;
+			try {
+				const fd = new FormData();
+				fd.append('file', file);
+				const res = await fetch('/api/profile/photo', { method: 'POST', body: fd });
+				const body = await res.json().catch(() => null);
+				if (!res.ok) throw new Error(body?.message ?? 'Gagal mengunggah foto');
+				form.foto_url = body.url;
+				toast('Foto berhasil diunggah');
+			} catch (e: any) {
+				toast(e.message, 'error');
+			} finally {
+				uploadingFoto = false;
+			}
+		}
 
 	async function refresh() {
 		teachers = await api<Teacher[]>('/api/teachers');
@@ -211,12 +238,36 @@
 	</div>
 </div>
 
-<Modal open={showModal} title={editing ? 'Edit Guru' : 'Tambah Guru'} onclose={() => (showModal = false)}>
-	<div class="space-y-3">
-		<div>
-			<label class="label">Nama Lengkap</label>
-			<input class="w-full" bind:value={form.nama} />
-		</div>
+	<Modal open={showModal} title={editing ? 'Edit Guru' : 'Tambah Guru'} onclose={() => (showModal = false)}>
+		<div class="space-y-4">
+			<!-- Upload Foto Guru -->
+			<div class="flex items-center gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+				<div class="w-16 h-16 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-indigo-200">
+					{#if form.foto_url}
+						<img src={form.foto_url} alt="Avatar" class="w-full h-full object-cover" />
+					{:else}
+						<Icon name="user" class="w-8 h-8" />
+					{/if}
+				</div>
+				<div class="flex-1 min-w-0">
+					<div class="text-sm font-semibold text-slate-900">Foto Avatar Guru</div>
+					<div class="text-xs text-slate-500 mb-2">Format JPG, PNG, WEBP (maks. 2 MB)</div>
+					<div class="flex items-center gap-2">
+						<label class="btn-secondary text-xs py-1.5 px-3 cursor-pointer">
+							{uploadingFoto ? 'Mengunggah...' : 'Pilih Foto'}
+							<input type="file" accept="image/*" class="hidden" disabled={uploadingFoto} onchange={(e) => uploadFotoGuru((e.target as HTMLInputElement).files?.[0] ?? null)} />
+						</label>
+						{#if form.foto_url}
+							<button type="button" class="text-xs text-rose-600 hover:underline" onclick={() => (form.foto_url = '')}>Hapus</button>
+						{/if}
+					</div>
+				</div>
+			</div>
+
+			<div>
+				<label class="label">Nama Lengkap</label>
+				<input class="w-full" bind:value={form.nama} />
+			</div>
 		<div class="grid grid-cols-2 gap-3">
 			<div>
 				<label class="label">Kode Guru</label>

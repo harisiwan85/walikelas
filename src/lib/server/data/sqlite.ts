@@ -286,14 +286,23 @@ export function getTeachers(): Teacher[] {
 		.all() as Teacher[];
 }
 
-export function createTeacher(data: Omit<Teacher, 'id'>) {
+export function createTeacher(data: Omit<Teacher, 'id'> & { foto_url?: string }) {
 	const school = getSchool();
-	return db
+	const res = db
 		.prepare('INSERT INTO teachers (school_id, kode, nip, nuptk, nama, jabatan, kontak) VALUES (?,?,?,?,?,?,?)')
 		.run(school.id, data.kode ?? '', data.nip ?? '', data.nuptk ?? '', data.nama, data.jabatan ?? 'guru_mapel', data.kontak ?? '');
+	const id = Number(res.lastInsertRowid);
+	if (data.foto_url) {
+		import('$lib/server/accounts').then(({ getOrCreateTeacherAccount }) => {
+			getOrCreateTeacherAccount({ id, ...data } as any).then((acc) => {
+				authSetProfile(acc.id, data.nama, data.foto_url!);
+			});
+		});
+	}
+	return res;
 }
 
-export function updateTeacher(id: number, data: Partial<Teacher>) {
+export function updateTeacher(id: number, data: Partial<Teacher> & { foto_url?: string }) {
 	const cur = db.prepare('SELECT * FROM teachers WHERE id=?').get(id) as any;
 	if (!cur) throw new Error('Guru tidak ditemukan');
 	db.prepare('UPDATE teachers SET kode=?, nip=?, nuptk=?, nama=?, jabatan=?, kontak=? WHERE id=?').run(
@@ -306,12 +315,15 @@ export function updateTeacher(id: number, data: Partial<Teacher>) {
 		id
 	);
 
-	// Nama & jabatan di halaman Data Guru ikut disinkronkan ke akun login
+	// Nama, jabatan & foto di halaman Data Guru ikut disinkronkan ke akun login
 	if (data.nama) {
 		db.prepare('UPDATE users SET name=? WHERE teacher_id=?').run(data.nama, id);
 	}
 	if (data.jabatan) {
 		db.prepare('UPDATE users SET role=? WHERE teacher_id=?').run(data.jabatan, id);
+	}
+	if (data.foto_url !== undefined) {
+		db.prepare('UPDATE users SET foto_url=? WHERE teacher_id=?').run(data.foto_url, id);
 	}
 }
 
