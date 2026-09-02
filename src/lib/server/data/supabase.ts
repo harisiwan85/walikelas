@@ -1296,19 +1296,95 @@ export async function getAlerts(): Promise<AlertItem[]> {
 
 export async function getDashboard(user: User): Promise<DashboardSummary> {
 	const tanggal = todayStr();
-	const holiday = await isHoliday(tanggal);
-	const classes = await getClasses(user);
+
+	// 1. Eksekusi query data dasar secara paralel
+	const [
+		holiday,
+		classes,
+		allActiveStudents,
+		alerts,
+		holidays
+	] = await Promise.all([
+		isHoliday(tanggal),
+		getClasses(user),
+		getStudents({ user, status: 'aktif' }),
+		user.role === 'guru_mapel' ? Promise.resolve([]) : getAlerts(),
+		getUpcomingHolidays(5)
+	]);
+
 	const classIds = classes.map((c) => c.id);
 
+	// Siapkan tanggal-tanggal hari efektif untuk tren 7 hari (maksimal 10 hari mundur)
+	const candidateDates: string[] = [];
+	for (let i = 10; i >= 0; i--) {
+		const d = addDays(tanggal, -i);
+		if (d > tanggal) continue;
+		const dow = new Date(`${d}T00:00:00`).getDay();
+		if (dow === 0 || dow === 6) continue;
+		candidateDates.push(d);
+	}
+
+	const monthStart = `${tanggal.slice(0, 7)}-01`;
+	const minDate = candidateDates.length ? candidateDates[0] : tanggal;
+	const queryStartDate = minDate < monthStart ? minDate : monthStart;
+
+	// 2. Satu query batch absensi untuk seluruh kebutuhan dashboard (hari ini, bulan ini, & tren 7 hari)
+	let attQuery = sb()
+		.from('attendance_daily')
+		.select('student_id, tanggal, status, keterangan, students!attendance_daily_student_id_fkey(class_id)')
+		.gte('tanggal', queryStartDate)
+		.lte('tanggal', tanggal);
+
+	if (classIds.length) {
+		const activeStudentIds = allActiveStudents.map((s) => s.id);
+		if (activeStudentIds.length) {
+			attQuery = attQuery.in('student_id', activeStudentIds);
+		}
+	}
+
+	// Parallel fetch batch absensi & kalender libur
+	const [
+		{ data: allAttRows },
+		{ data: holidayRows }
+	] = await Promise.all([
+		attQuery,
+		sb().from('academic_calendar').select('tanggal, tipe').in('tanggal', candidateDates).eq('tipe', 'libur')
+	]);
+
+	const holidayDateSet = new Set((holidayRows ?? []).map((h: any) => h.tanggal));
+	const attRows = allAttRows ?? [];
+
+	// Indexing data absensi di memori: [tanggal][student_id]
+	const attByDateAndStudent = new Map<string, Map<number, { status: AttendanceStatus; keterangan: string }>>();
+	for (const r of attRows) {
+		let dateMap = attByDateAndStudent.get(r.tanggal);
+		if (!dateMap) {
+			dateMap = new Map();
+			attByDateAndStudent.set(r.tanggal, dateMap);
+		}
+		dateMap.set(r.student_id, { status: r.status as AttendanceStatus, keterangan: r.keterangan ?? '' });
+	}
+
+	// 3. Hitung ringkasan hari ini per kelas & total
+	const todayMap = attByDateAndStudent.get(tanggal) ?? new Map();
 	const counts: Record<string, number> = { hadir: 0, sakit: 0, izin: 0, alpa: 0, terlambat: 0 };
 	let dicatat = 0;
 
-	const perKelas = [];
-	for (const c of classes) {
-		const map = await getAttendanceByDate(tanggal, [c.id]);
+	const studentsByClass = new Map<number, Student[]>();
+	for (const s of allActiveStudents) {
+		let list = studentsByClass.get(s.class_id);
+		if (!list) {
+			list = [];
+			studentsByClass.set(s.class_id, list);
+		}
+		list.push(s);
+	}
+
+	const perKelas = classes.map((c) => {
+		const classStudents = studentsByClass.get(c.id) ?? [];
 		const k = { class_id: c.id, class_name: c.nama, hadir: 0, sakit: 0, izin: 0, alpa: 0, terlambat: 0, belum_dicatat: 0, total: 0 };
-		for (const s of await getStudents({ class_id: c.id, status: 'aktif' })) {
-			const rec = map.get(s.id);
+		for (const s of classStudents) {
+			const rec = todayMap.get(s.id);
 			k.total++;
 			if (rec) {
 				k[rec.status as keyof typeof k]++;
@@ -1318,28 +1394,17 @@ export async function getDashboard(user: User): Promise<DashboardSummary> {
 				k.belum_dicatat++;
 			}
 		}
-		perKelas.push(k);
-	}
+		return k;
+	});
 
-	const totalSiswa = perKelas.reduce((sum, k) => sum + k.total, 0);
-	const alerts = user.role === 'guru_mapel' ? [] : await getAlerts();
+	const totalSiswa = allActiveStudents.length;
 
-	// statistik absensi bulan berjalan (untuk chart donat + mini donat per kelas)
-	const monthStart = `${tanggal.slice(0, 7)}-01`;
+	// 4. Hitung statistik bulan berjalan
 	const bulanIni = { hadir: 0, sakit: 0, izin: 0, alpa: 0, terlambat: 0, total: 0 };
-	let mq = sb()
-		.from('attendance_daily')
-		.select('student_id, status, students!attendance_daily_student_id_fkey(class_id)')
-		.gte('tanggal', monthStart)
-		.lte('tanggal', tanggal);
-	if (classIds.length) {
-		const { data: st } = await sb().from('students').select('id').in('class_id', classIds);
-		const ids = (st ?? []).map((s) => s.id);
-		if (ids.length) mq = mq.in('student_id', ids);
-	}
-	const { data: monthRows } = await mq;
 	const perKelasMonth = new Map<number, { hadir: number; sakit: number; izin: number; alpa: number; terlambat: number; total: number }>();
-	for (const r of monthRows ?? []) {
+
+	for (const r of attRows) {
+		if (r.tanggal < monthStart) continue;
 		if (r.status in bulanIni) bulanIni[r.status as keyof typeof bulanIni]++;
 		bulanIni.total++;
 		const stu: any = Array.isArray(r.students) ? r.students[0] : r.students;
@@ -1350,34 +1415,34 @@ export async function getDashboard(user: User): Promise<DashboardSummary> {
 		k.total++;
 		perKelasMonth.set(cid, k);
 	}
+
 	const bulanIniPerKelas = classes.map((c) => {
 		const k = perKelasMonth.get(c.id) ?? { hadir: 0, sakit: 0, izin: 0, alpa: 0, terlambat: 0, total: 0 };
 		return { class_id: c.id, class_name: c.nama, ...k };
 	});
 
+	// 5. Hitung tren 7 hari
 	const trend: { tanggal: string; hadir: number; sakit: number; izin: number; alpa: number; terlambat: number; total: number }[] = [];
-	for (let i = 10; i >= 0; i--) {
-		const d = addDays(tanggal, -i);
-		if (d > tanggal) continue;
-		const dow = new Date(`${d}T00:00:00`).getDay();
-		if (dow === 0 || dow === 6) continue;
-		if ((await isHoliday(d)).libur) continue;
+	for (const d of candidateDates) {
+		if (holidayDateSet.has(d)) continue;
 		const t = { tanggal: d, hadir: 0, sakit: 0, izin: 0, alpa: 0, terlambat: 0, total: 0 };
-		const map = await getAttendanceByDate(d, classIds.length ? classIds : null);
-		for (const s of await getStudents({ user, status: 'aktif' })) {
-			const rec = map.get(s.id);
-			if (rec) {
-				t[rec.status as keyof typeof t]++;
-				t.total++;
+		const dateMap = attByDateAndStudent.get(d);
+		if (dateMap) {
+			for (const s of allActiveStudents) {
+				const rec = dateMap.get(s.id);
+				if (rec) {
+					t[rec.status as keyof typeof t]++;
+					t.total++;
+				}
 			}
 		}
 		trend.push(t);
 		if (trend.length === 7) break;
 	}
 
+	// 6. Daftar siswa tidak hadir hari ini
 	const hariIniAbsen: { student_id: number; nama: string; class_name: string; status: AttendanceStatus; keterangan: string }[] = [];
-	const todayMap = await getAttendanceByDate(tanggal, classIds.length ? classIds : null);
-	for (const s of await getStudents({ user, status: 'aktif' })) {
+	for (const s of allActiveStudents) {
 		const rec = todayMap.get(s.id);
 		if (rec && rec.status !== 'hadir') {
 			hariIniAbsen.push({
@@ -1389,8 +1454,6 @@ export async function getDashboard(user: User): Promise<DashboardSummary> {
 			});
 		}
 	}
-
-	const holidays = await getUpcomingHolidays(5);
 
 	return {
 		tanggal,
