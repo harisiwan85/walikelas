@@ -121,26 +121,26 @@
 	}
 
 	// ---------------------------------------------------------------- mapel
-	async function loadMapelSubjects() {
-		if (!mClassId) {
-			mSubjects = [];
-			return;
-		}
-		try {
-			const res = await api<Subject[]>(`/api/subjects?class_id=${mClassId}`);
-			if (isGuruMapel) {
-				const mine = new Set(data.teacherSubjects.map((s) => s.id));
-				mSubjects = res.filter((s) => mine.has(s.id));
-			} else {
-				mSubjects = res;
+		async function loadMapelSubjects() {
+			if (!mClassId) {
+				mSubjects = [];
+				return;
 			}
-			const stillValid = mSubjects.some((s) => s.id === Number(mSubjectId));
-			if (!stillValid) mSubjectId = mSubjects[0]?.id ?? '';
-			if (mSubjectId) loadMapelData();
-		} catch (e: any) {
-			toast(e.message, 'error');
+			try {
+				const res = await api<Subject[]>(`/api/subjects?class_id=${mClassId}`);
+				if (data.teacherSubjects && data.teacherSubjects.length > 0 && user.role !== 'admin') {
+					const mine = new Set(data.teacherSubjects.map((s) => s.id));
+					mSubjects = res.filter((s) => mine.has(s.id));
+				} else {
+					mSubjects = res;
+				}
+				const stillValid = mSubjects.some((s) => s.id === Number(mSubjectId));
+				if (!stillValid) mSubjectId = mSubjects[0]?.id ?? '';
+				if (mSubjectId) loadMapelData();
+			} catch (e: any) {
+				toast(e.message, 'error');
+			}
 		}
-	}
 
 	async function loadMapelData() {
 		if (!mClassId || !mSubjectId) return;
