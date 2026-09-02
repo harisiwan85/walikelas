@@ -1,13 +1,22 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireRole } from '$lib/server/auth';
-import { createSubject, getSubjects, getSubjectsForClass } from '$lib/server/data';
+import { createSubject, getSubjects, getSubjectsForClass, getTeacherSubjects } from '$lib/server/data';
 
 export const GET: RequestHandler = async (event) => {
-	await requireRole(event, ['admin', 'kepala_sekolah', 'wali_kelas', 'guru_mapel']);
+	const user = await requireRole(event, ['admin', 'kepala_sekolah', 'wali_kelas', 'guru_mapel']);
 	const class_id = event.url.searchParams.get('class_id') ? Number(event.url.searchParams.get('class_id')) : undefined;
-	if (class_id) return json(await getSubjectsForClass(class_id));
-	return json(await getSubjects());
+
+	let subjects = class_id ? await getSubjectsForClass(class_id) : await getSubjects();
+
+	// Jika pengguna adalah guru mapel atau guru yang memiliki mapel ampuannya, hanya tampilkan mapel yang diampunya
+	if (user.role === 'guru_mapel' && user.teacher_id) {
+		const mine = await getTeacherSubjects(user.teacher_id);
+		const mineIds = new Set(mine.map((s) => s.id));
+		subjects = subjects.filter((s) => mineIds.has(s.id));
+	}
+
+	return json(subjects);
 };
 
 export const POST: RequestHandler = async (event) => {
