@@ -156,46 +156,56 @@
 	<div class="card overflow-hidden">
 		<div class="overflow-x-auto">
 			<table class="data-table">
-				<thead>
-					<tr>
-						<th class="text-center">No</th>
-						<th>Nama</th>
-						<th>Kode</th>
-						<th>NIP</th>
-						<th>Jabatan</th>
-						<th>Akun Login</th>
-						<th class="text-right">Aksi</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each filtered as t, i}
+					<thead>
 						<tr>
-							<td class="text-center text-slate-400">{i + 1}</td>
-							<td class="font-medium">{t.nama}</td>
-							<td class="font-mono text-xs text-slate-500">{t.kode || '-'}</td>
-							<td class="text-slate-500">{t.nip || '-'}</td>
-							<td><span class="badge-neutral">{jabatanLabel(t.jabatan)}</span></td>
-							<td>
-								{#if t.username}
-									<span class="inline-flex items-center gap-1.5 text-xs">
-										<span class="badge badge-hadir"><Icon name="user" class="w-3 h-3" /> {t.username}</span>
-										<span class="text-slate-400">{t.user_role}</span>
-									</span>
-								{:else}
-									<span class="text-xs text-slate-400">Belum ada akun</span>
-								{/if}
-							</td>
-							<td class="text-right whitespace-nowrap">
-								<button class="inline-flex items-center gap-1 text-indigo-600 hover:underline text-xs font-semibold cursor-pointer mr-3" onclick={() => openAccount(t)}><Icon name="user" class="w-3.5 h-3.5" /> Akun</button>
-								<button class="inline-flex items-center gap-1 text-emerald-600 hover:underline text-xs font-semibold cursor-pointer mr-3" onclick={() => loginAs(t)} title="Login sebagai guru ini"><Icon name="logout" class="w-3.5 h-3.5" /> Masuk sebagai</button>
-								<button class="inline-flex items-center gap-1 text-indigo-600 hover:underline text-xs font-semibold cursor-pointer mr-3" onclick={() => openEdit(t)}><Icon name="edit" class="w-3.5 h-3.5" /> Edit</button>
-								<button class="inline-flex items-center gap-1 text-rose-600 hover:underline text-xs font-semibold cursor-pointer" onclick={() => hapus(t)}><Icon name="trash" class="w-3.5 h-3.5" /> Hapus</button>
-							</td>
+							<th class="text-center">No</th>
+							<th>Foto</th>
+							<th>Nama</th>
+							<th>Kode</th>
+							<th>NIP</th>
+							<th>Jabatan</th>
+							<th>Akun Login</th>
+							<th class="text-right">Aksi</th>
 						</tr>
-					{:else}
-						<tr><td colspan="7" class="text-center py-8 text-slate-400">Tidak ada data guru</td></tr>
-					{/each}
-				</tbody>
+					</thead>
+					<tbody>
+						{#each filtered as t, i}
+							<tr>
+								<td class="text-center text-slate-400">{i + 1}</td>
+								<td>
+									<div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-slate-200">
+										{#if t.foto_url}
+											<img src={t.foto_url} alt={t.nama} class="w-full h-full object-cover" />
+										{:else}
+											<Icon name="user" class="w-4 h-4" />
+										{/if}
+									</div>
+								</td>
+								<td class="font-medium">{t.nama}</td>
+								<td class="font-mono text-xs text-slate-500">{t.kode || '-'}</td>
+								<td class="text-slate-500">{t.nip || '-'}</td>
+								<td><span class="badge-neutral">{jabatanLabel(t.jabatan)}</span></td>
+								<td>
+									{#if t.username}
+										<span class="inline-flex items-center gap-1.5 text-xs">
+											<span class="badge badge-hadir"><Icon name="user" class="w-3 h-3" /> {t.username}</span>
+											<span class="text-slate-400">{t.user_role}</span>
+										</span>
+									{:else}
+										<span class="text-xs text-slate-400">Belum ada akun</span>
+									{/if}
+								</td>
+								<td class="text-right whitespace-nowrap">
+									<button class="inline-flex items-center gap-1 text-indigo-600 hover:underline text-xs font-semibold cursor-pointer mr-3" onclick={() => openAccount(t)}><Icon name="user" class="w-3.5 h-3.5" /> Akun</button>
+									<button class="inline-flex items-center gap-1 text-emerald-600 hover:underline text-xs font-semibold cursor-pointer mr-3" onclick={() => loginAs(t)} title="Login sebagai guru ini"><Icon name="logout" class="w-3.5 h-3.5" /> Masuk sebagai</button>
+									<button class="inline-flex items-center gap-1 text-indigo-600 hover:underline text-xs font-semibold cursor-pointer mr-3" onclick={() => openEdit(t)}><Icon name="edit" class="w-3.5 h-3.5" /> Edit</button>
+									<button class="inline-flex items-center gap-1 text-rose-600 hover:underline text-xs font-semibold cursor-pointer" onclick={() => hapus(t)}><Icon name="trash" class="w-3.5 h-3.5" /> Hapus</button>
+								</td>
+							</tr>
+						{:else}
+							<tr><td colspan="8" class="text-center py-8 text-slate-400">Tidak ada data guru</td></tr>
+						{/each}
+					</tbody>
 			</table>
 		</div>
 	</div>

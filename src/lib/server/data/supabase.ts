@@ -374,8 +374,8 @@ export async function getTeachers(): Promise<Teacher[]> {
 		.from('teachers')
 		.select(
 			withKode
-				? 'id, kode, nip, nuptk, nama, jabatan, kontak, users!users_teacher_id_fkey(id, username, email, role)'
-				: 'id, nip, nuptk, nama, jabatan, kontak, users!users_teacher_id_fkey(id, username, email, role)'
+				? 'id, kode, nip, nuptk, nama, jabatan, kontak, users!users_teacher_id_fkey(id, username, email, role, foto_url)'
+				: 'id, nip, nuptk, nama, jabatan, kontak, users!users_teacher_id_fkey(id, username, email, role, foto_url)'
 		)
 		.order('nama');
 	return (data ?? []).map((t: any) => {
@@ -388,6 +388,7 @@ export async function getTeachers(): Promise<Teacher[]> {
 			nama: t.nama,
 			jabatan: t.jabatan ?? 'guru_mapel',
 			kontak: t.kontak ?? '',
+			foto_url: u?.foto_url ?? '',
 			user_id: u?.id ?? null,
 			username: u?.username ?? null,
 			user_email: u?.email ?? null,

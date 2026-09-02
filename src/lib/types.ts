@@ -85,6 +85,7 @@ export interface Teacher {
 	nama: string;
 	jabatan: string;
 	kontak: string;
+	foto_url?: string;
 	user_id: number | null;
 	username: string | null;
 	user_email: string | null;

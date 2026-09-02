@@ -280,7 +280,7 @@ export function getTeachers(): Teacher[] {
 	return db
 		.prepare(
 			`SELECT t.id, t.kode, t.nip, t.nuptk, t.nama, t.jabatan, t.kontak,
-              u.id AS user_id, u.username, u.email AS user_email, u.role AS user_role
+              u.id AS user_id, u.username, u.email AS user_email, u.role AS user_role, u.foto_url
        FROM teachers t LEFT JOIN users u ON u.teacher_id = t.id ORDER BY t.nama`
 		)
 		.all() as Teacher[];
