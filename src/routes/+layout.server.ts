@@ -5,9 +5,18 @@ import { seedIfEmpty } from '$lib/server/seed';
 import { isSupabase } from '$lib/server/data';
 
 export const load: LayoutServerLoad = async (event) => {
-	await seedIfEmpty();
+	try {
+		await seedIfEmpty();
+	} catch (e) {
+		console.error('[seed error]', e);
+	}
 	const start = performance.now();
-	const user = await getCurrentUser(event);
+	let user = null;
+	try {
+		user = await getCurrentUser(event);
+	} catch (e) {
+		console.error('[auth error]', e);
+	}
 	const latencyMs = Math.round(performance.now() - start);
 	if (
 		!user &&
