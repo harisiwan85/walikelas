@@ -1,6 +1,11 @@
 <script lang="ts">
+	import type { School } from '$lib/types';
 	import { toast } from '$lib/client/toast';
 	import Icon from '$lib/components/Icon.svelte';
+
+	let { data }: { data: { school: School | null } } = $props();
+	const school = $derived(data?.school);
+	const schoolName = $derived(school?.nama || 'Aplikasi Wali Kelas');
 
 	let identifier = $state('');
 	let password = $state('');
@@ -42,41 +47,49 @@
 	}
 </script>
 
-<div class="min-h-screen flex bg-slate-100">
-	<!-- Panel branding -->
-	<div class="hidden lg:flex lg:w-[46%] bg-gradient-to-br from-indigo-900 via-indigo-700 to-sky-600 text-white flex-col justify-between p-12">
-		<div class="flex items-center gap-3">
-			<div class="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center">
-				<Icon name="sekolah" class="w-6 h-6" />
-			</div>
-			<div>
-				<div class="font-bold text-lg leading-tight">Aplikasi Wali Kelas</div>
-				<div class="text-xs text-indigo-200">Sistem absensi & laporan sekolah</div>
-			</div>
-		</div>
-		<div class="space-y-6">
-			<h1 class="text-3xl font-bold leading-snug">Kelola absensi, jurnal, dan laporan kelas dalam satu tempat.</h1>
-			<ul class="space-y-3 text-sm text-indigo-100">
-				<li class="flex items-center gap-3"><span class="w-6 h-6 rounded-lg bg-white/15 flex items-center justify-center"><Icon name="check" class="w-3.5 h-3.5" /></span> Input absensi harian & per mata pelajaran</li>
-				<li class="flex items-center gap-3"><span class="w-6 h-6 rounded-lg bg-white/15 flex items-center justify-center"><Icon name="check" class="w-3.5 h-3.5" /></span> Jurnal harian guru & surat panggilan otomatis</li>
-				<li class="flex items-center gap-3"><span class="w-6 h-6 rounded-lg bg-white/15 flex items-center justify-center"><Icon name="check" class="w-3.5 h-3.5" /></span> Laporan per tanggal siap cetak PDF/Excel</li>
-			</ul>
-		</div>
-		<div class="text-xs text-indigo-200">© 2026 • SMP Negeri 1 Harapan Jaya</div>
-	</div>
-
-	<!-- Panel form -->
-	<div class="flex-1 flex items-center justify-center p-4 lg:p-8">
-		<div class="w-full max-w-md">
-			<div class="lg:hidden flex items-center justify-center gap-3 mb-6">
-				<div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center">
-					<Icon name="sekolah" class="w-7 h-7" />
+	<div class="min-h-screen flex bg-slate-100">
+		<!-- Panel branding -->
+		<div class="hidden lg:flex lg:w-[46%] bg-gradient-to-br from-indigo-900 via-indigo-700 to-sky-600 text-white flex-col justify-between p-12">
+			<div class="flex items-center gap-3">
+				<div class="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center overflow-hidden">
+					{#if school?.logo_url}
+						<img src={school.logo_url} alt="Logo" class="w-full h-full object-cover" />
+					{:else}
+						<Icon name="sekolah" class="w-6 h-6" />
+					{/if}
 				</div>
 				<div>
-					<h1 class="text-xl font-bold text-slate-900">Aplikasi Wali Kelas</h1>
-					<p class="text-sm text-slate-500">Sistem absensi & laporan sekolah</p>
+					<div class="font-bold text-lg leading-tight">{schoolName}</div>
+					<div class="text-xs text-indigo-200">{school?.npsn ? `NPSN: ${school.npsn}` : 'Sistem absensi & laporan sekolah'}</div>
 				</div>
 			</div>
+			<div class="space-y-6">
+				<h1 class="text-3xl font-bold leading-snug">Kelola absensi, jurnal, dan laporan kelas dalam satu tempat.</h1>
+				<ul class="space-y-3 text-sm text-indigo-100">
+					<li class="flex items-center gap-3"><span class="w-6 h-6 rounded-lg bg-white/15 flex items-center justify-center"><Icon name="check" class="w-3.5 h-3.5" /></span> Input absensi harian & per mata pelajaran</li>
+					<li class="flex items-center gap-3"><span class="w-6 h-6 rounded-lg bg-white/15 flex items-center justify-center"><Icon name="check" class="w-3.5 h-3.5" /></span> Jurnal harian guru & surat panggilan otomatis</li>
+					<li class="flex items-center gap-3"><span class="w-6 h-6 rounded-lg bg-white/15 flex items-center justify-center"><Icon name="check" class="w-3.5 h-3.5" /></span> Laporan per tanggal siap cetak PDF/Excel</li>
+				</ul>
+			</div>
+			<div class="text-xs text-indigo-200">© {new Date().getFullYear()} • {schoolName}</div>
+		</div>
+
+		<!-- Panel form -->
+		<div class="flex-1 flex items-center justify-center p-4 lg:p-8">
+			<div class="w-full max-w-md">
+				<div class="lg:hidden flex items-center justify-center gap-3 mb-6">
+					<div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center overflow-hidden">
+						{#if school?.logo_url}
+							<img src={school.logo_url} alt="Logo" class="w-full h-full object-cover" />
+						{:else}
+							<Icon name="sekolah" class="w-7 h-7" />
+						{/if}
+					</div>
+					<div>
+						<h1 class="text-xl font-bold text-slate-900">{schoolName}</h1>
+						<p class="text-sm text-slate-500">Sistem absensi & laporan sekolah</p>
+					</div>
+				</div>
 
 			<div class="card p-8">
 				<h2 class="text-xl font-bold text-slate-900">Masuk</h2>

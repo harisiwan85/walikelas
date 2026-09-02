@@ -263,83 +263,43 @@
 			</span>
 		</div>
 		{@render chipGroup(r.status, (s) => onPick(r.student_id, s))}
-		{#if r.status !== 'hadir'}
-			<input
-				class="w-full text-sm"
-				placeholder="Catatan (opsional)"
-				bind:value={r.keterangan}
-			/>
-			{#if !isMapel && !isGuruMapel}
-				<div class="flex items-center gap-2">
-					<label class="text-[11px] text-slate-500 cursor-pointer inline-flex items-center gap-1 hover:text-indigo-600">
-						<Icon name="upload" class="w-3.5 h-3.5" />
-						{#if r.bukti_url}
-							<a href={r.bukti_url} target="_blank" class="text-emerald-600 hover:underline" onclick={(e) => e.stopPropagation()}>Lihat bukti</a>
-						{:else if uploadingId === r.student_id}
-							Mengunggah...
-						{:else}
-							Unggah surat/bukti
-						{/if}
-						<input
-							type="file"
-							accept="image/*,.pdf"
-							class="hidden"
-							onchange={(e) => uploadBukti(r.student_id, (e.target as HTMLInputElement).files?.[0] ?? null)}
-						/>
-					</label>
-				</div>
-			{/if}
-		{/if}
-	</div>
-{/snippet}
-
-<!-- Baris tabel versi desktop -->
-{#snippet tableRow(r: any, idx: number, onPick: (id: number, s: AttendanceStatus) => void, isMapel: boolean)}
-	<tr>
-		<td class="text-slate-400">{idx + 1}</td>
-		<td class="font-medium">{r.nama}</td>
-		<td class="text-slate-500">{r.nisn || '-'}</td>
-		<td>
-			<div class="flex flex-wrap gap-1.5">
-				{#each statuses as s}
-					<button
-						type="button"
-						class="px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer {statusBtnCls[s]}"
-						data-active={r.status === s}
-						onclick={() => onPick(r.student_id, s)}
-					>
-						{STATUS_LABEL[s]}
-					</button>
-				{/each}
-			</div>
-		</td>
-		<td>
 			{#if r.status !== 'hadir'}
-				<input class="w-full min-w-32" placeholder="Catatan (opsional)" bind:value={r.keterangan} />
-				{#if !isMapel && !isGuruMapel}
-					<div class="mt-1.5 flex items-center gap-2">
-						<label class="text-[11px] text-slate-500 cursor-pointer inline-flex items-center gap-1 hover:text-indigo-600">
-							<Icon name="upload" class="w-3.5 h-3.5" />
-							{#if r.bukti_url}
-								<a href={r.bukti_url} target="_blank" class="text-emerald-600 hover:underline" onclick={(e) => e.stopPropagation()}>Lihat bukti</a>
-							{:else if uploadingId === r.student_id}
-								Mengunggah...
-							{:else}
-								Unggah surat/bukti
-							{/if}
-							<input
-								type="file"
-								accept="image/*,.pdf"
-								class="hidden"
-								onchange={(e) => uploadBukti(r.student_id, (e.target as HTMLInputElement).files?.[0] ?? null)}
-							/>
-						</label>
-					</div>
-				{/if}
+				<input
+					class="w-full text-sm"
+					placeholder="Catatan (opsional)"
+					bind:value={r.keterangan}
+				/>
 			{/if}
-		</td>
-	</tr>
-{/snippet}
+		</div>
+	{/snippet}
+
+	<!-- Baris tabel versi desktop -->
+	{#snippet tableRow(r: any, idx: number, onPick: (id: number, s: AttendanceStatus) => void, isMapel: boolean)}
+		<tr>
+			<td class="text-slate-400">{idx + 1}</td>
+			<td class="font-medium">{r.nama}</td>
+			<td class="text-slate-500">{r.nisn || '-'}</td>
+			<td>
+				<div class="flex flex-wrap gap-1.5">
+					{#each statuses as s}
+						<button
+							type="button"
+							class="px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer {statusBtnCls[s]}"
+							data-active={r.status === s}
+							onclick={() => onPick(r.student_id, s)}
+						>
+							{STATUS_LABEL[s]}
+						</button>
+					{/each}
+				</div>
+			</td>
+			<td>
+				{#if r.status !== 'hadir'}
+					<input class="w-full min-w-32" placeholder="Catatan (opsional)" bind:value={r.keterangan} />
+				{/if}
+			</td>
+		</tr>
+	{/snippet}
 
 <!-- Ringkasan jumlah status -->
 {#snippet summaryChips(count: (s: AttendanceStatus) => number)}
