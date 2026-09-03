@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { isSupabase, isMysql, getSetting } from '$lib/server/data';
+import { checkIsSupabase, checkIsMysql, getSetting } from '$lib/server/data';
 
 /**
  * Cek status koneksi database — dipakai untuk mengukur latensi
@@ -11,7 +11,7 @@ import { isSupabase, isMysql, getSetting } from '$lib/server/data';
  */
 export const GET: RequestHandler = async () => {
 	const start = performance.now();
-	const mode = isMysql ? 'mysql' : isSupabase ? 'supabase' : 'sqlite';
+	const mode = checkIsMysql() ? 'mysql' : checkIsSupabase() ? 'supabase' : 'sqlite';
 	try {
 		await getSetting('alpa_threshold');
 	} catch {

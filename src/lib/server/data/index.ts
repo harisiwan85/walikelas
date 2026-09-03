@@ -1,11 +1,18 @@
 import { env } from '$env/dynamic/private';
 import * as supabase from './supabase';
 
-/** true bila terhubung ke MySQL Remote. */
-export const isMysql = Boolean(env.MYSQL_HOST || process.env.MYSQL_HOST);
+/** Fungsi dinamis untuk mengecek koneksi MySQL Remote. */
+export function checkIsMysql(): boolean {
+	return Boolean(env.MYSQL_HOST || process.env.MYSQL_HOST);
+}
 
-/** true bila terhubung ke Supabase (URL + service role key tersedia di env dan bukan MySQL). */
-export const isSupabase = !isMysql && Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
+/** Fungsi dinamis untuk mengecek koneksi Supabase. */
+export function checkIsSupabase(): boolean {
+	return !checkIsMysql() && Boolean((env.SUPABASE_URL || process.env.SUPABASE_URL) && (env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY));
+}
+
+export const isMysql = checkIsMysql();
+export const isSupabase = checkIsSupabase();
 
 type SupabaseType = typeof supabase;
 
@@ -14,7 +21,7 @@ let _sqliteModule: any = null;
 let _mysqlModule: any = null;
 
 async function getDbModule() {
-	if (isMysql) {
+	if (checkIsMysql()) {
 		if (!_mysqlModule) {
 			_mysqlModule = await import('./mysql');
 		}
@@ -28,7 +35,7 @@ async function getDbModule() {
 
 function proxy<K extends keyof SupabaseType>(key: K): SupabaseType[K] {
 	return (async (...args: any[]) => {
-		if (isSupabase) {
+		if (checkIsSupabase()) {
 			return (supabase[key] as any)(...args);
 		}
 		const mod = await getDbModule();

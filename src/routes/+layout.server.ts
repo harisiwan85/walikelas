@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 import { getCurrentUser } from '$lib/server/auth';
 import { seedIfEmpty } from '$lib/server/seed';
-import { isSupabase, isMysql } from '$lib/server/data';
+import { checkIsSupabase, checkIsMysql } from '$lib/server/data';
 
 export const load: LayoutServerLoad = async (event) => {
 	try {
@@ -25,7 +25,7 @@ export const load: LayoutServerLoad = async (event) => {
 	) {
 		throw redirect(302, '/login');
 	}
-	const dbMode = isMysql ? 'mysql' : isSupabase ? 'supabase' : 'sqlite';
+	const dbMode = checkIsMysql() ? 'mysql' : checkIsSupabase() ? 'supabase' : 'sqlite';
 	return { user, dbMode, latencyMs };
 };
 

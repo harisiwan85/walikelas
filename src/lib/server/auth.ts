@@ -4,6 +4,8 @@ import type { Role, User } from '$lib/types';
 import type { RequestEvent } from '@sveltejs/kit';
 import {
 	isSupabase,
+	checkIsSupabase,
+	checkIsMysql,
 	authFindUserByEmail,
 	authFindUserByIdentifier,
 	authGetUserById,
@@ -45,7 +47,7 @@ function cacheInvalidate(userId: number) {
 	}
 }
 
-// ---------------------------------------------------------------- password (mode lokal)
+// ---------------------------------------------------------------- password (mode lokal / mysql)
 
 export function hashPassword(password: string): string {
 	const salt = randomBytes(16).toString('hex');
@@ -102,15 +104,15 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 
 /**
  * Login — menerima username ATAU email. Mode Supabase memverifikasi via
- * Supabase Auth (email), mode lokal via scrypt. Sesi aplikasi (cookie)
- * dikelola sendiri di tabel sessions pada kedua mode.
+ * Supabase Auth (email), mode lokal & MySQL via scrypt. Sesi aplikasi (cookie)
+ * dikelola sendiri di tabel sessions pada semua mode.
  */
 export async function login(identifier: string, password: string): Promise<User> {
 	const found = await authFindUserByIdentifier(identifier);
 	if (!found) throw error(401, 'Username/email atau password salah');
 	const email = found.email;
 
-	if (isSupabase) {
+	if (checkIsSupabase()) {
 		const { getSupabaseAuthClient } = await import('./data/supabase');
 		const authClient = getSupabaseAuthClient();
 		const { data, error: authErr } = await authClient.auth.signInWithPassword({ email, password });
@@ -130,7 +132,7 @@ export async function login(identifier: string, password: string): Promise<User>
 }
 
 export async function changePassword(user: User, oldPassword: string, newPassword: string): Promise<void> {
-	if (isSupabase) {
+	if (checkIsSupabase()) {
 		const { getSupabaseAuthClient } = await import('./data/supabase');
 		const authClient = getSupabaseAuthClient();
 		const { data, error: authErr } = await authClient.auth.signInWithPassword({ email: user.email, password: oldPassword });
@@ -139,6 +141,13 @@ export async function changePassword(user: User, oldPassword: string, newPasswor
 		if (updErr) throw new Error('Gagal mengganti password: ' + updErr.message);
 		return;
 	}
+	const found = await authFindUserByEmail(user.email);
+	if (!found?.password_hash || !verifyPassword(oldPassword, found.password_hash)) {
+		throw error(400, 'Password lama salah');
+	}
+	await authUpdatePasswordHash(user.id, hashPassword(newPassword));
+	cacheInvalidate(user.id);
+}
 	const found = await authFindUserByEmail(user.email);
 	if (!found?.password_hash || !verifyPassword(oldPassword, found.password_hash)) {
 		throw error(400, 'Password lama salah');

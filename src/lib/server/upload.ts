@@ -1,4 +1,4 @@
-import { isSupabase } from '$lib/server/data';
+import { checkIsSupabase } from '$lib/server/data';
 import { getSupabase } from '$lib/server/data/supabase';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -10,7 +10,7 @@ const localUploadDir = path.join(__dirname, '../../../../data/uploads');
 const BUCKET_NAME = 'uploads';
 
 /**
- * Upload file ke Supabase Storage (jika mode Supabase) atau filesystem lokal (jika SQLite).
+ * Upload file ke Supabase Storage (jika mode Supabase) atau filesystem lokal (jika SQLite / MySQL).
  * Mengembalikan URL publik file yang dapat diakses browser.
  */
 export async function saveUploadedFile(file: File, prefix: string): Promise<string> {
@@ -25,7 +25,7 @@ export async function saveUploadedFile(file: File, prefix: string): Promise<stri
 	const fileName = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 	const buffer = Buffer.from(await file.arrayBuffer());
 
-	if (isSupabase) {
+	if (checkIsSupabase()) {
 		const client = getSupabase();
 		// Pastikan bucket ada (jika belum dibuat di Supabase Storage)
 		try {
