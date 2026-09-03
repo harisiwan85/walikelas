@@ -148,13 +148,6 @@ export async function changePassword(user: User, oldPassword: string, newPasswor
 	await authUpdatePasswordHash(user.id, hashPassword(newPassword));
 	cacheInvalidate(user.id);
 }
-	const found = await authFindUserByEmail(user.email);
-	if (!found?.password_hash || !verifyPassword(oldPassword, found.password_hash)) {
-		throw error(400, 'Password lama salah');
-	}
-	await authUpdatePasswordHash(user.id, hashPassword(newPassword));
-	cacheInvalidate(user.id);
-}
 
 export async function updateProfile(userId: number, name: string, fotoUrl = '') {
 	cacheInvalidate(userId);
