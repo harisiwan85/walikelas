@@ -1,5 +1,5 @@
 import { hashPassword } from './auth';
-import { isSupabase } from './data';
+import { isSupabase, isMysql } from './data';
 import { addDays, todayStr } from '$lib/date';
 import type { AttendanceStatus } from '$lib/types';
 
@@ -34,7 +34,11 @@ function pickDate(i: number): string {
 const CITIES = ['Jakarta', 'Bandung', 'Bogor', 'Depok', 'Tangerang', 'Bekasi', 'Surabaya', 'Semarang'];
 
 export async function seedIfEmpty() {
-	// Mode Supabase: data awal dibuat via supabase/seed.sql
+	if (isMysql) {
+		const { seedMysqlIfEmpty } = await import('./seedMysql');
+		await seedMysqlIfEmpty();
+		return;
+	}
 	if (isSupabase) return;
 	const { getDb } = await import('./db');
 	const db = await getDb();

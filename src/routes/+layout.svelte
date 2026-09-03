@@ -96,12 +96,12 @@
 				<div class="flex items-center gap-3">
 					{#if user.role === 'admin' && data.dbMode}
 						<div
-							class="flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-medium {data.dbMode === 'supabase' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}"
-							title="Mode database: {data.dbMode === 'supabase' ? 'Supabase (online)' : 'SQLite lokal (development)'}"
+							class="flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-medium {(data.dbMode as string) === 'mysql' ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' : data.dbMode === 'supabase' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}"
+							title="Mode database: {(data.dbMode as string) === 'mysql' ? 'MySQL (Remote 51.79.231.14)' : data.dbMode === 'supabase' ? 'Supabase (online)' : 'SQLite lokal (development)'}"
 						>
-							<span class={`w-2 h-2 rounded-full ${data.dbMode === 'supabase' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+							<span class={`w-2 h-2 rounded-full ${(data.dbMode as string) === 'mysql' ? 'bg-blue-500 animate-pulse' : data.dbMode === 'supabase' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
 							<Icon name="database" class="w-3.5 h-3.5" />
-							<span class="font-semibold">{data.dbMode === 'supabase' ? 'Supabase' : 'SQLite lokal'}</span>
+							<span class="font-semibold">{(data.dbMode as string) === 'mysql' ? 'MySQL Remote' : data.dbMode === 'supabase' ? 'Supabase' : 'SQLite lokal'}</span>
 							<span class="tabular-nums">{data.latencyMs ?? '-'} ms</span>
 						</div>
 					{/if}

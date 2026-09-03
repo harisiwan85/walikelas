@@ -32,6 +32,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "better-sqlite3": "11.7.0",
+    "mysql2": "^3.24.3",
     "pdf-lib": "1.17.1",
     "xlsx": "0.18.5",
     "xlsx-js-style": "^1.2.0"
