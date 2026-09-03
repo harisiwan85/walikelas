@@ -5,10 +5,12 @@ import { addDays, todayStr } from '$lib/date';
 
 export const load: PageServerLoad = async (event) => {
 	const user = await requireRole(event, ['admin', 'kepala_sekolah', 'wali_kelas']);
-	const classes = await getClasses(user);
 	const to = todayStr();
 	const from = addDays(to, -30);
-	const history = await getAttendanceHistory({ from, to, user });
-	const logs = await getAttendanceLogs(200);
+	const [classes, history, logs] = await Promise.all([
+		getClasses(user),
+		getAttendanceHistory({ from, to, user }),
+		getAttendanceLogs(200)
+	]);
 	return { user, classes, history, logs, from, to };
 };

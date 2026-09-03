@@ -33,12 +33,18 @@ function pickDate(i: number): string {
 
 const CITIES = ['Jakarta', 'Bandung', 'Bogor', 'Depok', 'Tangerang', 'Bekasi', 'Surabaya', 'Semarang'];
 
+let isSeeded = false;
+
 export async function seedMysqlIfEmpty() {
+	if (isSeeded) return;
 	await initMysqlTables();
 	const p = getMysqlPool();
 
 	const [userRows] = await p.query<any[]>('SELECT COUNT(*) AS c FROM users');
-	if (Number(userRows[0]?.c ?? 0) > 0) return;
+	if (Number(userRows[0]?.c ?? 0) > 0) {
+		isSeeded = true;
+		return;
+	}
 
 	console.log('[seed-mysql] Memulai inisialisasi data contoh pada MySQL Remote...');
 
@@ -216,4 +222,5 @@ export async function seedMysqlIfEmpty() {
 	await p.query('INSERT IGNORE INTO academic_periods (tahun_ajaran, semester, aktif) VALUES ("2026/2027", "Genap", 0)');
 
 	console.log('[seed-mysql] Data contoh MySQL berhasil dibuat.');
+	isSeeded = true;
 }

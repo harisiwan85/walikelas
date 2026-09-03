@@ -4,5 +4,6 @@ import { getClasses, getSubjects, getTeachers } from '$lib/server/data';
 
 export const load: PageServerLoad = async (event) => {
 	await requireRole(event, ['admin']);
-	return { subjects: await getSubjects(), teachers: await getTeachers(), classes: await getClasses() };
+	const [subjects, teachers, classes] = await Promise.all([getSubjects(), getTeachers(), getClasses()]);
+	return { subjects, teachers, classes };
 };

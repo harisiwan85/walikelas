@@ -1219,20 +1219,27 @@ export async function getAttendanceMatrix(opts: {
 	}
 	const where = conds.join(' AND ');
 
-	const [dateRows] = await p.query<any[]>(
-		`SELECT DISTINCT a.tanggal FROM attendance_daily a
-		 JOIN students s ON s.id = a.student_id
-		 WHERE ${where} ORDER BY a.tanggal ASC`,
-		params
-	);
-	const dates = dateRows.map((r) => r.tanggal as string);
+	const studentFilter: StudentFilter = {};
+	if (opts.class_id) studentFilter.class_id = opts.class_id;
+	if (allowed) studentFilter.user = opts.user;
 
-	const [attRows] = await p.query<any[]>(
-		`SELECT a.student_id, a.tanggal, a.status FROM attendance_daily a
-		 JOIN students s ON s.id = a.student_id
-		 WHERE ${where} ORDER BY s.nama`,
-		params
-	);
+	const [[dateRows], [attRows], allStudents] = await Promise.all([
+		p.query<any[]>(
+			`SELECT DISTINCT a.tanggal FROM attendance_daily a
+			 JOIN students s ON s.id = a.student_id
+			 WHERE ${where} ORDER BY a.tanggal ASC`,
+			params
+		),
+		p.query<any[]>(
+			`SELECT a.student_id, a.tanggal, a.status FROM attendance_daily a
+			 JOIN students s ON s.id = a.student_id
+			 WHERE ${where} ORDER BY s.nama`,
+			params
+		),
+		getStudents({ ...studentFilter, status: 'aktif' })
+	]);
+
+	const dates = dateRows.map((r) => r.tanggal as string);
 
 	const byStudent = new Map<number, Record<string, AttendanceStatus>>();
 	for (const r of attRows) {
@@ -1241,10 +1248,6 @@ export async function getAttendanceMatrix(opts: {
 		byStudent.get(sid)![r.tanggal] = r.status;
 	}
 
-	const studentFilter: StudentFilter = {};
-	if (opts.class_id) studentFilter.class_id = opts.class_id;
-	if (allowed) studentFilter.user = opts.user;
-	const allStudents = await getStudents({ ...studentFilter, status: 'aktif' });
 	const students = opts.student_ids?.length ? allStudents.filter((s) => opts.student_ids!.includes(s.id)) : allStudents;
 
 	const rows = students.map((s) => {
@@ -1414,24 +1417,105 @@ export async function getAlerts(): Promise<AlertItem[]> {
 export async function getDashboard(user: User): Promise<DashboardSummary> {
 	const p = await pool();
 	const tanggal = todayStr();
-	const holiday = await isHoliday(tanggal);
-	const classes = await getClasses(user);
+
+	// Batch 1: data awal secara paralel
+	const [classes, holiday, alerts, holidays] = await Promise.all([
+		getClasses(user),
+		isHoliday(tanggal),
+		user.role === 'guru_mapel' ? [] : getAlerts(),
+		getUpcomingHolidays(5)
+	]);
 	const classIds = classes.map((c) => c.id);
 
+	if (classIds.length === 0) {
+		return {
+			tanggal,
+			libur: holiday.libur,
+			keterangan_libur: holiday.keterangan,
+			hadir: 0,
+			sakit: 0,
+			izin: 0,
+			alpa: 0,
+			terlambat: 0,
+			belum_dicatat: 0,
+			total_siswa: 0,
+			bulan_ini: { hadir: 0, sakit: 0, izin: 0, alpa: 0, terlambat: 0, total: 0 },
+			bulan_ini_per_kelas: [],
+			per_kelas: [],
+			alerts,
+			trend: [],
+			hariIniAbsen: [],
+			holidays
+		};
+	}
+
+	const inClassPlaceholders = classIds.map(() => '?').join(',');
+	const monthStart = `${tanggal.slice(0, 7)}-01`;
+	const trendStart = addDays(tanggal, -14);
+
+	// Batch 2: Ambil seluruh data presensi harian, bulanan, tren & siswa secara paralel
+	const [activeStudents, todayRowsRes, monthRowsRes, trendRowsRes, holidayRowsRes] = await Promise.all([
+		getStudents({ user, status: 'aktif' }),
+		p.query<any[]>(
+			`SELECT a.id, a.student_id, a.tanggal, a.status, a.keterangan, s.class_id
+			 FROM attendance_daily a
+			 JOIN students s ON s.id = a.student_id
+			 WHERE a.tanggal = ? AND s.class_id IN (${inClassPlaceholders})`,
+			[tanggal, ...classIds]
+		),
+		p.query<any[]>(
+			`SELECT a.status, s.class_id FROM attendance_daily a
+			 JOIN students s ON s.id = a.student_id
+			 WHERE a.tanggal BETWEEN ? AND ? AND s.class_id IN (${inClassPlaceholders})`,
+			[monthStart, tanggal, ...classIds]
+		),
+		p.query<any[]>(
+			`SELECT a.tanggal, a.status, COUNT(*) as cnt
+			 FROM attendance_daily a
+			 JOIN students s ON s.id = a.student_id
+			 WHERE a.tanggal BETWEEN ? AND ? AND s.class_id IN (${inClassPlaceholders})
+			 GROUP BY a.tanggal, a.status`,
+			[trendStart, tanggal, ...classIds]
+		),
+		p.query<any[]>(
+			`SELECT tanggal, keterangan FROM academic_calendar WHERE tanggal BETWEEN ? AND ? AND tipe = 'libur'`,
+			[trendStart, tanggal]
+		)
+	]);
+
+	const todayRows = todayRowsRes[0];
+	const monthRows = monthRowsRes[0];
+	const trendRows = trendRowsRes[0];
+	const holidayRows = holidayRowsRes[0];
+
+	// Peta presensi hari ini
+	const todayMap = new Map<number, any>();
+	for (const r of todayRows) {
+		todayMap.set(Number(r.student_id), r);
+	}
+
+	// Kelompokkan siswa aktif per kelas di memori
+	const studentsByClass = new Map<number, Student[]>();
+	for (const s of activeStudents) {
+		const list = studentsByClass.get(s.class_id) ?? [];
+		list.push(s);
+		studentsByClass.set(s.class_id, list);
+	}
+
+	// Hitung rekap per kelas dan total status hari ini
 	const counts: Record<string, number> = { hadir: 0, sakit: 0, izin: 0, alpa: 0, terlambat: 0 };
 	let dicatat = 0;
-
 	const perKelas: DashboardSummary['per_kelas'] = [];
+
 	for (const c of classes) {
-		const map = await getAttendanceByDate(tanggal, [c.id]);
-		const students = await getStudents({ class_id: c.id, status: 'aktif' });
+		const students = studentsByClass.get(c.id) ?? [];
 		const k = { class_id: c.id, class_name: c.nama, hadir: 0, sakit: 0, izin: 0, alpa: 0, terlambat: 0, belum_dicatat: 0, total: 0 };
 		for (const s of students) {
-			const rec = map.get(s.id);
 			k.total++;
+			const rec = todayMap.get(s.id);
 			if (rec) {
-				k[rec.status as keyof typeof k]++;
-				counts[rec.status as keyof typeof counts]++;
+				if (rec.status in k) k[rec.status as keyof typeof k]++;
+				if (rec.status in counts) counts[rec.status as keyof typeof counts]++;
 				dicatat++;
 			} else {
 				k.belum_dicatat++;
@@ -1441,21 +1525,9 @@ export async function getDashboard(user: User): Promise<DashboardSummary> {
 	}
 
 	const totalSiswa = perKelas.reduce((sum, k) => sum + k.total, 0);
-	const alerts = user.role === 'guru_mapel' ? [] : await getAlerts();
 
-	const monthStart = `${tanggal.slice(0, 7)}-01`;
+	// Hitung rekap bulan ini di memori
 	const bulanIni = { hadir: 0, sakit: 0, izin: 0, alpa: 0, terlambat: 0, total: 0 };
-	let monthRows: any[] = [];
-	if (classIds.length > 0) {
-		const [mRows] = await p.query<any[]>(
-			`SELECT a.status, s.class_id FROM attendance_daily a
-			 JOIN students s ON s.id = a.student_id
-			 WHERE a.tanggal BETWEEN ? AND ? AND s.class_id IN (${classIds.map(() => '?').join(',')})`,
-			[monthStart, tanggal, ...classIds]
-		);
-		monthRows = mRows;
-	}
-
 	const perKelasMonth = new Map<number, { hadir: number; sakit: number; izin: number; alpa: number; terlambat: number; total: number }>();
 	for (const r of monthRows) {
 		if (r.status in bulanIni) bulanIni[r.status as keyof typeof bulanIni]++;
@@ -1473,33 +1545,41 @@ export async function getDashboard(user: User): Promise<DashboardSummary> {
 		return { class_id: c.id, class_name: c.nama, ...k };
 	});
 
+	// Hitung tren 7 hari efektif di memori
+	const holidaySet = new Set(holidayRows.map((h: any) => h.tanggal));
+	const trendMap = new Map<string, Record<string, number>>();
+	for (const r of trendRows) {
+		const d = r.tanggal;
+		const cur = trendMap.get(d) ?? { hadir: 0, sakit: 0, izin: 0, alpa: 0, terlambat: 0, total: 0 };
+		const cnt = Number(r.cnt);
+		if (r.status in cur) cur[r.status] = cnt;
+		cur.total += cnt;
+		trendMap.set(d, cur);
+	}
+
 	const trend: { tanggal: string; hadir: number; sakit: number; izin: number; alpa: number; terlambat: number; total: number }[] = [];
-	for (let i = 10; i >= 0; i--) {
+	for (let i = 13; i >= 0; i--) {
 		const d = addDays(tanggal, -i);
 		if (d > tanggal) continue;
 		const dow = new Date(`${d}T00:00:00`).getDay();
 		if (dow === 0 || dow === 6) continue;
-		const hol = await isHoliday(d);
-		if (hol.libur) continue;
+		if (holidaySet.has(d)) continue;
 
-		const t = { tanggal: d, hadir: 0, sakit: 0, izin: 0, alpa: 0, terlambat: 0, total: 0 };
-		const map = await getAttendanceByDate(d, classIds.length ? classIds : null);
-		const activeStudents = await getStudents({ user, status: 'aktif' });
-
-		for (const s of activeStudents) {
-			const rec = map.get(s.id);
-			if (rec) {
-				t[rec.status as keyof typeof t]++;
-				t.total++;
-			}
-		}
-		trend.push(t);
+		const tData = trendMap.get(d) ?? { hadir: 0, sakit: 0, izin: 0, alpa: 0, terlambat: 0, total: 0 };
+		trend.push({
+			tanggal: d,
+			hadir: tData.hadir,
+			sakit: tData.sakit,
+			izin: tData.izin,
+			alpa: tData.alpa,
+			terlambat: tData.terlambat,
+			total: tData.total
+		});
 		if (trend.length === 7) break;
 	}
 
+	// Daftar siswa tidak hadir hari ini di memori
 	const hariIniAbsen: { student_id: number; nama: string; class_name: string; status: AttendanceStatus; keterangan: string }[] = [];
-	const todayMap = await getAttendanceByDate(tanggal, classIds.length ? classIds : null);
-	const activeStudents = await getStudents({ user, status: 'aktif' });
 	for (const s of activeStudents) {
 		const rec = todayMap.get(s.id);
 		if (rec && rec.status !== 'hadir') {
@@ -1512,8 +1592,6 @@ export async function getDashboard(user: User): Promise<DashboardSummary> {
 			});
 		}
 	}
-
-	const holidays = await getUpcomingHolidays(5);
 
 	return {
 		tanggal,

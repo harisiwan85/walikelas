@@ -162,22 +162,12 @@
 				</div>
 			</header>
 
-			<main class="flex-1 p-4 lg:p-8 pb-24 lg:pb-8">
-				{#if $navigating}
-					<!-- Skeleton saat pindah halaman -->
-					<div class="space-y-4 animate-pulse" aria-label="Memuat halaman">
-						<div class="h-8 w-56 rounded-lg bg-slate-200"></div>
-						<div class="h-4 w-40 rounded bg-slate-200"></div>
-						<div class="grid grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
-							{#each Array(6) as _, i}
-								<div class="h-24 rounded-xl bg-slate-200"></div>
-							{/each}
-						</div>
-						<div class="h-64 rounded-xl bg-slate-200"></div>
-					</div>
-				{:else}
-					{@render children()}
-				{/if}
+			{#if $navigating}
+				<div class="fixed top-0 inset-x-0 z-50 h-1 bg-gradient-to-r from-indigo-500 via-sky-400 to-indigo-600 animate-pulse shadow-sm"></div>
+			{/if}
+
+			<main class="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 transition-opacity duration-150 {$navigating ? 'opacity-50 pointer-events-none' : 'opacity-100'}">
+				{@render children()}
 			</main>
 
 			<!-- Bottom nav mobile -->

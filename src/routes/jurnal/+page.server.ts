@@ -7,18 +7,17 @@ export const load: PageServerLoad = async (event) => {
 	const user = await requireRole(event, ['admin', 'wali_kelas', 'guru_mapel']);
 	const isGuru = user.role === 'guru_mapel';
 
-	let classes;
-	let teacherSubjects: Awaited<ReturnType<typeof getTeacherSubjects>> = [];
-	if (isGuru && user.teacher_id) {
-		classes = await getClassesForTeacher(user.teacher_id);
-		teacherSubjects = await getTeacherSubjects(user.teacher_id);
-	} else {
-		classes = await getClasses(user);
-	}
-
 	const { from, to } = monthRange(todayStr().slice(0, 7));
-	const journals = await getJournals({ from, to, user });
-	const subjects = await getSubjects();
+
+	let classesPromise = (isGuru && user.teacher_id) ? getClassesForTeacher(user.teacher_id) : getClasses(user);
+	let teacherSubjectsPromise = (isGuru && user.teacher_id) ? getTeacherSubjects(user.teacher_id) : Promise.resolve([]);
+
+	const [classes, teacherSubjects, journals, subjects] = await Promise.all([
+		classesPromise,
+		teacherSubjectsPromise,
+		getJournals({ from, to, user }),
+		getSubjects()
+	]);
 
 	return { user, classes, subjects, teacherSubjects, isGuruMapel: isGuru, journals, from, to };
 };

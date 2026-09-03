@@ -4,9 +4,11 @@ import { getAcademicPeriods, getClasses, getSchool, getTeachers } from '$lib/ser
 
 export const load: PageServerLoad = async (event) => {
 	await requireRole(event, ['admin']);
-	const classes = await getClasses();
-	const teachers = await getTeachers();
-	const school = await getSchool();
-	const periods = await getAcademicPeriods();
+	const [classes, teachers, school, periods] = await Promise.all([
+		getClasses(),
+		getTeachers(),
+		getSchool(),
+		getAcademicPeriods()
+	]);
 	return { classes, teachers, school, periods };
 };
