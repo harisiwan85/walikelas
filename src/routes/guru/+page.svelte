@@ -4,37 +4,48 @@
 	import { toast } from '$lib/client/toast';
 	import Modal from '$lib/components/Modal.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 
 	let { data }: { data: { teachers: Teacher[] } } = $props();
 	const { teachers: initial } = data;
 
-		let teachers = $state<Teacher[]>(initial);
-		let q = $state('');
-		let showModal = $state(false);
-		let editing = $state<Teacher | null>(null);
-		let form = $state<{ kode: string; nip: string; nuptk: string; nama: string; jabatan: string; kontak: string; foto_url: string }>({
-			kode: '',
-			nip: '',
-			nuptk: '',
-			nama: '',
-			jabatan: 'guru_mapel',
-			kontak: '',
-			foto_url: ''
-		});
-		let uploadingFoto = $state(false);
+	let teachers = $state<Teacher[]>(initial);
+	let q = $state('');
+	let page = $state(1);
+	let pageSize = $state(10);
 
-		// --- kelola akun ---
-		let showAccount = $state(false);
-		let accountTeacher = $state<Teacher | null>(null);
-		let accForm = $state({ username: '', email: '', password: '', role: 'guru_mapel' });
-		let accBusy = $state(false);
+	let showModal = $state(false);
+	let editing = $state<Teacher | null>(null);
+	let form = $state<{ kode: string; nip: string; nuptk: string; nama: string; jabatan: string; kontak: string; foto_url: string }>({
+		kode: '',
+		nip: '',
+		nuptk: '',
+		nama: '',
+		jabatan: 'guru_mapel',
+		kontak: '',
+		foto_url: ''
+	});
+	let uploadingFoto = $state(false);
 
-		const jabatanLabel = (j: string) =>
-			j === 'admin' ? 'Admin TU' : j === 'kepala_sekolah' ? 'Kepala Sekolah' : j === 'wali_kelas' ? 'Wali Kelas' : 'Guru Mapel';
+	// --- kelola akun ---
+	let showAccount = $state(false);
+	let accountTeacher = $state<Teacher | null>(null);
+	let accForm = $state({ username: '', email: '', password: '', role: 'guru_mapel' });
+	let accBusy = $state(false);
 
-		let filtered = $derived(
-			teachers.filter((t) => !q || t.nama.toLowerCase().includes(q.toLowerCase()) || t.nip.includes(q) || t.kode.toLowerCase().includes(q.toLowerCase()))
-		);
+	const jabatanLabel = (j: string) =>
+		j === 'admin' ? 'Admin TU' : j === 'kepala_sekolah' ? 'Kepala Sekolah' : j === 'wali_kelas' ? 'Wali Kelas' : 'Guru Mapel';
+
+	let filtered = $derived(
+		teachers.filter((t) => !q || t.nama.toLowerCase().includes(q.toLowerCase()) || t.nip.includes(q) || t.kode.toLowerCase().includes(q.toLowerCase()))
+	);
+
+	$effect(() => {
+		const _ = q;
+		page = 1;
+	});
+
+	let paginated = $derived(filtered.slice((page - 1) * pageSize, page * pageSize));
 
 		function openAdd() {
 			editing = null;
@@ -196,9 +207,9 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each filtered as t, i}
+						{#each paginated as t, i}
 							<tr>
-								<td class="text-center text-slate-400">{i + 1}</td>
+								<td class="text-center text-slate-400">{(page - 1) * pageSize + i + 1}</td>
 								<td>
 									<div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-slate-200">
 										{#if t.foto_url}
@@ -235,6 +246,7 @@
 					</tbody>
 			</table>
 		</div>
+		<Pagination bind:currentPage={page} bind:pageSize totalItems={filtered.length} />
 	</div>
 </div>
 

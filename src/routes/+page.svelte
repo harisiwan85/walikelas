@@ -5,10 +5,19 @@
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import AreaChart from '$lib/components/AreaChart.svelte';
 	import Badge from '$lib/components/Badge.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 	import { formatDateShort } from '$lib/date';
 
 	let { data }: { data: { summary: DashboardSummary; user: User; tanggalLabel: string } } = $props();
 	const { summary, user, tanggalLabel } = data;
+
+	let alertPage = $state(1);
+	const alertPageSize = 5;
+	let paginatedAlerts = $derived(summary.alerts.slice((alertPage - 1) * alertPageSize, alertPage * alertPageSize));
+
+	let absenPage = $state(1);
+	let absenPageSize = $state(5);
+	let paginatedAbsen = $derived(summary.hariIniAbsen.slice((absenPage - 1) * absenPageSize, absenPage * absenPageSize));
 
 	const canInput = user.role === 'admin' || user.role === 'wali_kelas';
 
@@ -170,7 +179,7 @@
 					<span class="badge-alpa">{summary.alerts.length} siswa</span>
 				</div>
 				<div class="p-4 space-y-2 max-h-56 overflow-y-auto">
-					{#each summary.alerts as a}
+					{#each paginatedAlerts as a}
 						<div class="flex items-center justify-between bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">
 							<div>
 								<div class="text-sm font-medium text-slate-900">{a.nama}</div>
@@ -188,6 +197,9 @@
 						<EmptyState icon="check" title="Tidak ada siswa dengan alpa berlebih" description="Semua siswa masih di bawah ambang alpa." compact />
 					{/each}
 				</div>
+				{#if summary.alerts.length > alertPageSize}
+					<Pagination bind:currentPage={alertPage} pageSize={alertPageSize} totalItems={summary.alerts.length} compact={true} showPageSize={false} />
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -253,9 +265,9 @@
 					</tr>
 					</thead>
 					<tbody>
-						{#each summary.hariIniAbsen as a, i}
+						{#each paginatedAbsen as a, i}
 							<tr>
-								<td class="text-center text-slate-400">{i + 1}</td>
+								<td class="text-center text-slate-400">{(absenPage - 1) * absenPageSize + i + 1}</td>
 								<td class="font-medium">{a.nama}</td>
 								<td>{a.class_name}</td>
 								<td class="text-center"><Badge status={a.status} /></td>
@@ -267,6 +279,9 @@
 					</tbody>
 				</table>
 			</div>
+			{#if summary.hariIniAbsen.length > absenPageSize}
+				<Pagination bind:currentPage={absenPage} pageSize={absenPageSize} totalItems={summary.hariIniAbsen.length} compact={true} showPageSize={false} />
+			{/if}
 		</div>
 	</div>
 </div>

@@ -4,15 +4,29 @@
 	import { toast } from '$lib/client/toast';
 	import Modal from '$lib/components/Modal.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 
 	let { data }: { data: { classes: ClassRow[]; teachers: Teacher[]; school: School; periods: AcademicPeriod[] } } = $props();
 	const { classes: initial, teachers, school, periods } = data;
 
 	let classes = $state<ClassRow[]>(initial);
 	let filterYear = $state(school.tahun_ajaran_aktif);
+	let page = $state(1);
+	let pageSize = $state(10);
+
 	let showModal = $state(false);
 	let editing = $state<ClassRow | null>(null);
 	let form = $state({ nama: '', tingkat: 7, tahun_ajaran: '', wali_kelas_id: '' as number | string });
+
+	let filtered = $derived(classes.filter((c) => !filterYear || c.tahun_ajaran === filterYear));
+	const yearOptions = $derived([...new Set(classes.map((c) => c.tahun_ajaran))].sort().reverse());
+
+	$effect(() => {
+		const _ = filterYear;
+		page = 1;
+	});
+
+	let paginated = $derived(filtered.slice((page - 1) * pageSize, page * pageSize));
 
 	function openAdd() {
 		editing = null;
@@ -46,9 +60,6 @@
 			toast(e.message, 'error');
 		}
 	}
-
-	let filtered = $derived(classes.filter((c) => !filterYear || c.tahun_ajaran === filterYear));
-	const yearOptions = $derived([...new Set(classes.map((c) => c.tahun_ajaran))].sort().reverse());
 
 	async function hapus(c: ClassRow) {
 		if (!confirm(`Hapus kelas ${c.nama}? Seluruh siswa di dalamnya akan terhapus.`)) return;
@@ -97,9 +108,9 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each filtered as c, i}
+				{#each paginated as c, i}
 					<tr>
-						<td class="text-center text-slate-400">{i + 1}</td>
+						<td class="text-center text-slate-400">{(page - 1) * pageSize + i + 1}</td>
 						<td class="font-medium">Kelas {c.nama}</td>
 						<td>{c.tingkat}</td>
 						<td>
@@ -124,6 +135,7 @@
 				{/each}
 			</tbody>
 		</table>
+		<Pagination bind:currentPage={page} bind:pageSize totalItems={filtered.length} />
 	</div>
 </div>
 

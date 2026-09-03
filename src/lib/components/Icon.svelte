@@ -210,6 +210,18 @@
 				[12, 12, 1.5],
 				[12, 19, 1.5]
 			]
+		},
+		'chevron-left': {
+			polylines: ['15 18 9 12 15 6']
+		},
+		'chevron-right': {
+			polylines: ['9 18 15 12 9 6']
+		},
+		'chevrons-left': {
+			polylines: ['11 17 6 12 11 7', '18 17 13 12 18 7']
+		},
+		'chevrons-right': {
+			polylines: ['13 17 18 12 13 7', '6 17 11 12 6 7']
 		}
 	};
 

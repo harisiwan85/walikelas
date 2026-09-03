@@ -5,6 +5,7 @@
 	import { addDays, monthRange, semesterRange, todayStr } from '$lib/date';
 	import Icon from '$lib/components/Icon.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 
 	let { data }: { data: { user: User; classes: ClassRow[]; school: School; rows: ReportRow[]; matrix: MatrixReport; from: string; to: string } } = $props();
 	const { user, classes, school, rows: initialRows, matrix: initialMatrix, from: initialFrom, to: initialTo } = data;
@@ -24,6 +25,14 @@
 	let rows = $state<ReportRow[]>(initialRows);
 	let matrix = $state<MatrixReport>(initialMatrix);
 	let loading = $state(false);
+
+	let matrixPage = $state(1);
+	let matrixPageSize = $state(25);
+	let paginatedMatrixRows = $derived(matrix.rows.slice((matrixPage - 1) * matrixPageSize, matrixPage * matrixPageSize));
+
+	let summaryPage = $state(1);
+	let summaryPageSize = $state(25);
+	let paginatedSummaryRows = $derived(rows.slice((summaryPage - 1) * summaryPageSize, summaryPage * summaryPageSize));
 
 	const letter: Record<AttendanceStatus, string> = { hadir: 'H', sakit: 'S', izin: 'I', alpa: 'A', terlambat: 'T' };
 	const cellCls: Record<AttendanceStatus, string> = {
@@ -51,6 +60,8 @@
 
 	async function loadReport() {
 		loading = true;
+		matrixPage = 1;
+		summaryPage = 1;
 		try {
 			const params = new URLSearchParams({ from, to });
 			if (selectedClass) params.set('class_id', String(selectedClass));
@@ -174,9 +185,9 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each matrix.rows as r, i}
+						{#each paginatedMatrixRows as r, i}
 							<tr>
-								<td class="sticky left-0 bg-white z-10 text-center text-slate-400">{i + 1}</td>
+								<td class="sticky left-0 bg-white z-10 text-center text-slate-400">{(matrixPage - 1) * matrixPageSize + i + 1}</td>
 								<td class="sticky left-10 bg-white z-10 font-medium whitespace-nowrap">{r.nama}</td>
 								{#each matrix.dates as d}
 									{@const st = r.per_date[d]}
@@ -225,6 +236,7 @@
 				<span class="inline-flex items-center gap-1"><span class="inline-flex w-5 h-5 items-center justify-center rounded text-[10px] font-bold {cellCls.terlambat}">T</span> Terlambat</span>
 				<span class="ml-auto">- belum diinput</span>
 			</div>
+			<Pagination bind:currentPage={matrixPage} bind:pageSize={matrixPageSize} totalItems={matrix.rows.length} pageSizeOptions={[10, 25, 50, 100]} />
 		</div>
 	{:else}
 		<div class="grid lg:grid-cols-3 gap-6">
@@ -282,9 +294,9 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each rows as r, i}
+						{#each paginatedSummaryRows as r, i}
 							<tr>
-								<td class="text-slate-400">{i + 1}</td>
+								<td class="text-slate-400">{(summaryPage - 1) * summaryPageSize + i + 1}</td>
 								<td class="font-medium">{r.nama}</td>
 								<td class="text-slate-500">{r.nisn || '-'}</td>
 								<td class="text-center">{r.hadir}</td>
@@ -310,6 +322,7 @@
 					</tbody>
 				</table>
 			</div>
+			<Pagination bind:currentPage={summaryPage} bind:pageSize={summaryPageSize} totalItems={rows.length} pageSizeOptions={[10, 25, 50, 100]} />
 		</div>
 	{/if}
 </div>

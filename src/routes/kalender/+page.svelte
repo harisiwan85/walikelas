@@ -3,12 +3,17 @@
 	import { api } from '$lib/client/api';
 	import { toast } from '$lib/client/toast';
 	import Icon from '$lib/components/Icon.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 	import { formatDateId } from '$lib/date';
 
 	let { data }: { data: { holidays: Holiday[] } } = $props();
 	const { holidays: initial } = data;
 
 	let holidays = $state<Holiday[]>(initial);
+	let page = $state(1);
+	let pageSize = $state(10);
+	let paginated = $derived(holidays.slice((page - 1) * pageSize, page * pageSize));
+
 	let form = $state({ tanggal: '', keterangan: '', tipe: 'libur' });
 	let showForm = $state(false);
 
@@ -93,9 +98,9 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each holidays as h, i}
+					{#each paginated as h, i}
 						<tr>
-							<td class="text-center text-slate-400">{i + 1}</td>
+							<td class="text-center text-slate-400">{(page - 1) * pageSize + i + 1}</td>
 							<td class="font-medium">{formatDateId(h.tanggal)}</td>
 							<td>{h.keterangan || '-'}</td>
 							<td class="text-center">
@@ -113,5 +118,6 @@
 				</tbody>
 			</table>
 		</div>
+		<Pagination bind:currentPage={page} bind:pageSize totalItems={holidays.length} />
 	</div>
 </div>

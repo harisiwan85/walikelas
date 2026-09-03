@@ -2,6 +2,7 @@
 	import type { ClassRow, User } from '$lib/types';
 	import { STATUS_LABEL } from '$lib/types';
 	import Badge from '$lib/components/Badge.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 	import { api } from '$lib/client/api';
 	import { toast } from '$lib/client/toast';
 	import { formatDateShort } from '$lib/date';
@@ -16,8 +17,17 @@
 	let history = $state<any[]>(initialHistory);
 	let logs = $state<any[]>(initialLogs);
 
+	let historyPage = $state(1);
+	let historyPageSize = $state(15);
+	let paginatedHistory = $derived(history.slice((historyPage - 1) * historyPageSize, historyPage * historyPageSize));
+
+	let logsPage = $state(1);
+	let logsPageSize = $state(15);
+	let paginatedLogs = $derived(logs.slice((logsPage - 1) * logsPageSize, logsPage * logsPageSize));
+
 	async function loadHistory() {
 		try {
+			historyPage = 1;
 			const params = new URLSearchParams({ from, to });
 			if (filterClass) params.set('class_id', String(filterClass));
 			history = await api<any[]>(`/api/attendance/history?${params}`);
@@ -28,6 +38,7 @@
 
 	async function loadLogs() {
 		try {
+			logsPage = 1;
 			logs = await api<any[]>('/api/attendance/logs');
 		} catch (e: any) {
 			toast(e.message, 'error');
@@ -97,9 +108,9 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each history as h, i}
+						{#each paginatedHistory as h, i}
 							<tr>
-								<td class="text-center text-slate-400">{i + 1}</td>
+								<td class="text-center text-slate-400">{(historyPage - 1) * historyPageSize + i + 1}</td>
 								<td>{h.tanggal}</td>
 								<td class="font-medium">{h.nama}</td>
 								<td>{h.class_name}</td>
@@ -114,6 +125,7 @@
 					</tbody>
 				</table>
 			</div>
+			<Pagination bind:currentPage={historyPage} bind:pageSize={historyPageSize} totalItems={history.length} />
 		</div>
 	{:else}
 		<div class="card overflow-hidden">
@@ -131,9 +143,9 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each logs as l, i}
+						{#each paginatedLogs as l, i}
 							<tr>
-								<td class="text-center text-slate-400">{i + 1}</td>
+								<td class="text-center text-slate-400">{(logsPage - 1) * logsPageSize + i + 1}</td>
 								<td class="text-slate-400">{l.changed_at}</td>
 								<td class="font-medium">{l.nama}</td>
 								<td>{l.tanggal}</td>
@@ -153,6 +165,7 @@
 					</tbody>
 				</table>
 			</div>
+			<Pagination bind:currentPage={logsPage} bind:pageSize={logsPageSize} totalItems={logs.length} />
 		</div>
 	{/if}
 </div>

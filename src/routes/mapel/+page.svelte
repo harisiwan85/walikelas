@@ -4,14 +4,19 @@
 	import { toast } from '$lib/client/toast';
 	import Modal from '$lib/components/Modal.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 
 	let { data }: { data: { subjects: Subject[]; teachers: Teacher[]; classes: ClassRow[] } } = $props();
 	const { subjects: initial, teachers, classes } = data;
 
-		let subjects = $state<Subject[]>(initial);
-		let showModal = $state(false);
-		let editing = $state<Subject | null>(null);
-		let form = $state<{ kode: string; nama: string; teacher_ids: number[]; class_ids: number[] }>({
+	let subjects = $state<Subject[]>(initial);
+	let page = $state(1);
+	let pageSize = $state(10);
+	let paginated = $derived(subjects.slice((page - 1) * pageSize, page * pageSize));
+
+	let showModal = $state(false);
+	let editing = $state<Subject | null>(null);
+	let form = $state<{ kode: string; nama: string; teacher_ids: number[]; class_ids: number[] }>({
 			kode: '',
 			nama: '',
 			teacher_ids: [],
@@ -109,9 +114,9 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each subjects as s, i}
+				{#each paginated as s, i}
 					<tr>
-						<td class="text-center text-slate-400">{i + 1}</td>
+						<td class="text-center text-slate-400">{(page - 1) * pageSize + i + 1}</td>
 						<td class="font-mono text-xs text-slate-500">{s.kode || '-'}</td>
 						<td class="font-medium">{s.nama}</td>
 						<td>
@@ -132,6 +137,7 @@
 				{/each}
 			</tbody>
 		</table>
+		<Pagination bind:currentPage={page} bind:pageSize totalItems={subjects.length} />
 	</div>
 </div>
 

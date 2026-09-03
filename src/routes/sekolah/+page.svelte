@@ -3,6 +3,7 @@
 	import { api } from '$lib/client/api';
 	import { toast } from '$lib/client/toast';
 	import Icon from '$lib/components/Icon.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 
 	let { data }: { data: { school: School } } = $props();
 	const { school: initial } = data;
@@ -11,6 +12,10 @@
 	let saving = $state(false);
 
 	let periods = $state<AcademicPeriod[]>([]);
+	let periodPage = $state(1);
+	let periodPageSize = $state(5);
+	let paginatedPeriods = $derived(periods.slice((periodPage - 1) * periodPageSize, periodPage * periodPageSize));
+
 	let newPeriod = $state({ tahun_ajaran: '', semester: 'Ganjil' });
 	let periodBusy = $state(false);
 	let uploadingLogo = $state(false);
@@ -176,9 +181,9 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each periods as p, i}
+					{#each paginatedPeriods as p, i}
 						<tr>
-							<td class="text-center text-slate-400">{i + 1}</td>
+							<td class="text-center text-slate-400">{(periodPage - 1) * periodPageSize + i + 1}</td>
 							<td class="font-medium">{p.tahun_ajaran}</td>
 							<td>{p.semester}</td>
 							<td class="text-center">
@@ -201,6 +206,9 @@
 					{/each}
 				</tbody>
 			</table>
+			{#if periods.length > periodPageSize}
+				<Pagination bind:currentPage={periodPage} pageSize={periodPageSize} totalItems={periods.length} compact={true} showPageSize={false} />
+			{/if}
 		</div>
 
 		<div class="flex flex-wrap items-end gap-3 pt-1">

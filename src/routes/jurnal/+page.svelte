@@ -5,6 +5,7 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 	import { formatDateId, formatDateShort, todayStr } from '$lib/date';
 
 	let { data }: { data: { user: User; journals: JournalEntry[]; classes: ClassRow[]; subjects: Subject[]; teacherSubjects: Subject[]; isGuruMapel: boolean; from: string; to: string } } = $props();
@@ -14,6 +15,8 @@
 	let filterClass = $state<number | ''>('');
 	let from = $state(data.from);
 	let to = $state(data.to);
+	let page = $state(1);
+	let pageSize = $state(10);
 	let showModal = $state(false);
 	let editing = $state<JournalEntry | null>(null);
 	let menuFor = $state<number | null>(null);
@@ -47,6 +50,13 @@
 			return mc && md;
 		})
 	);
+
+	$effect(() => {
+		const _ = [filterClass, from, to];
+		page = 1;
+	});
+
+	let paginated = $derived(filtered.slice((page - 1) * pageSize, page * pageSize));
 
 	async function refresh() {
 		const params = new URLSearchParams();
@@ -155,7 +165,7 @@
 	</div>
 
 	<div class="space-y-4">
-		{#each filtered as j (j.id)}
+		{#each paginated as j (j.id)}
 			<div class="card p-5 space-y-3">
 				<div class="flex flex-wrap items-start justify-between gap-2">
 					<div class="flex items-center gap-3">
@@ -238,6 +248,12 @@
 		{:else}
 			<EmptyState icon="jurnal" title="Belum ada catatan jurnal" description={emptyMsg} />
 		{/each}
+
+		{#if filtered.length > 0}
+			<div class="card overflow-hidden">
+				<Pagination bind:currentPage={page} bind:pageSize totalItems={filtered.length} />
+			</div>
+		{/if}
 	</div>
 </div>
 

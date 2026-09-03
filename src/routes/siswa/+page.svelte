@@ -4,6 +4,7 @@
 	import { toast } from '$lib/client/toast';
 	import Modal from '$lib/components/Modal.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 
 	let { data }: { data: { user: User; students: Student[]; classes: ClassRow[] } } = $props();
 	const { user, students: initialStudents, classes } = data;
@@ -16,6 +17,9 @@
 	let q = $state('');
 	let filterClass = $state<number | ''>('');
 	let filterStatus = $state<StudentStatus | ''>('');
+
+	let page = $state(1);
+	let pageSize = $state(10);
 
 	let showModal = $state(false);
 	let editing = $state<Student | null>(null);
@@ -35,6 +39,14 @@
 			return matchQ && matchClass && matchStatus;
 		})
 	);
+
+	// Reset ke halaman 1 saat filter pencarian berubah
+	$effect(() => {
+		const _ = [q, filterClass, filterStatus];
+		page = 1;
+	});
+
+	let paginated = $derived(filtered.slice((page - 1) * pageSize, page * pageSize));
 
 	async function refresh() {
 		students = await api<Student[]>('/api/students');
@@ -152,9 +164,9 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each filtered as s, i}
+					{#each paginated as s, i}
 						<tr>
-							<td class="text-slate-400">{i + 1}</td>
+							<td class="text-slate-400">{(page - 1) * pageSize + i + 1}</td>
 							<td class="font-medium">{s.nama}</td>
 							<td>{s.class_name}</td>
 							<td class="text-slate-500">{s.nisn || '-'}</td>
@@ -174,6 +186,7 @@
 				</tbody>
 			</table>
 		</div>
+		<Pagination bind:currentPage={page} bind:pageSize totalItems={filtered.length} />
 	</div>
 </div>
 
