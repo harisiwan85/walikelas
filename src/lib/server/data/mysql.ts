@@ -839,112 +839,108 @@ export async function upsertAttendance(dateStr: string, classId: number, entries
 	return count;
 }
 
-export async function getAttendanceHistory(user: User, filters: { class_id?: number; startDate?: string; endDate?: string; status?: AttendanceStatus; student_name?: string }): Promise<any[]> {
+export async function getAttendanceHistory(filter: {
+	student_id?: number;
+	class_id?: number;
+	from?: string;
+	to?: string;
+	user?: User | null;
+	startDate?: string;
+	endDate?: string;
+	status?: AttendanceStatus;
+	student_name?: string;
+}): Promise<any[]> {
 	const p = await pool();
-	const allowed = allowedClassIds(user);
+	const conds: string[] = [];
+	const params: any[] = [];
 
-	let sql = `
-		SELECT a.id, a.student_id, a.tanggal, a.status, a.keterangan, a.bukti_url, a.created_at,
-		       s.nama AS student_name, s.nisn, c.nama AS class_name
+	if (filter?.student_id) {
+		conds.push('a.student_id = ?');
+		params.push(filter.student_id);
+	}
+
+	const allowed = filter?.user ? allowedClassIds(filter.user) : null;
+	if (allowed) {
+		if (allowed.length === 0) return [];
+		conds.push(`s.class_id IN (${allowed.map(() => '?').join(',')})`);
+		params.push(...allowed);
+	} else if (filter?.class_id) {
+		conds.push('s.class_id = ?');
+		params.push(filter.class_id);
+	}
+
+	const fromDate = filter?.from || filter?.startDate;
+	if (fromDate) {
+		conds.push('a.tanggal >= ?');
+		params.push(fromDate);
+	}
+
+	const toDate = filter?.to || filter?.endDate;
+	if (toDate) {
+		conds.push('a.tanggal <= ?');
+		params.push(toDate);
+	}
+
+	if (filter?.status) {
+		conds.push('a.status = ?');
+		params.push(filter.status);
+	}
+
+	if (filter?.student_name) {
+		conds.push('LOWER(s.nama) LIKE LOWER(?)');
+		params.push(`%${filter.student_name}%`);
+	}
+
+	const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+
+	const sql = `
+		SELECT a.id, a.student_id, s.nisn, s.nama, s.class_id, c.nama AS class_name,
+		       a.tanggal, a.status, a.keterangan, a.bukti_url, u.name AS dicatat_oleh, a.updated_at
 		FROM attendance_daily a
 		JOIN students s ON s.id = a.student_id
 		JOIN classes c ON c.id = s.class_id
+		LEFT JOIN users u ON u.id = a.dicatat_oleh
+		${where}
+		ORDER BY a.tanggal DESC, s.nama LIMIT 500
 	`;
-	const whereClauses: string[] = [];
-	const params: any[] = [];
-
-	if (filters.class_id) {
-		whereClauses.push('s.class_id = ?');
-		params.push(filters.class_id);
-	}
-	if (filters.startDate) {
-		whereClauses.push('a.tanggal >= ?');
-		params.push(filters.startDate);
-	}
-	if (filters.endDate) {
-		whereClauses.push('a.tanggal <= ?');
-		params.push(filters.endDate);
-	}
-	if (filters.status) {
-		whereClauses.push('a.status = ?');
-		params.push(filters.status);
-	}
-	if (filters.student_name) {
-		whereClauses.push('LOWER(s.nama) LIKE LOWER(?)');
-		params.push(`%${filters.student_name}%`);
-	}
-	if (allowed !== null) {
-		if (allowed.length === 0) return [];
-		whereClauses.push(`s.class_id IN (${allowed.map(() => '?').join(',')})`);
-		params.push(...allowed);
-	}
-
-	if (whereClauses.length > 0) {
-		sql += ' WHERE ' + whereClauses.join(' AND ');
-	}
-	sql += ' ORDER BY a.tanggal DESC, s.nama LIMIT 500';
 
 	const [rows] = await p.query<any[]>(sql, params);
 	return rows.map((r) => ({
 		id: Number(r.id),
 		student_id: Number(r.student_id),
-		student_name: r.student_name,
 		nisn: r.nisn ?? '',
-		class_name: r.class_name,
+		nama: r.nama ?? '',
+		class_id: Number(r.class_id),
+		class_name: r.class_name ?? '',
 		tanggal: r.tanggal,
 		status: r.status,
 		keterangan: r.keterangan ?? '',
-		bukti_url: r.bukti_url ?? ''
+		bukti_url: r.bukti_url ?? '',
+		dicatat_oleh: r.dicatat_oleh ?? null,
+		updated_at: r.updated_at ? (typeof r.updated_at === 'string' ? r.updated_at : new Date(r.updated_at).toISOString()) : ''
 	}));
 }
 
-export async function getAttendanceLogs(user: User, filters: { class_id?: number; startDate?: string; endDate?: string }): Promise<any[]> {
+export async function getAttendanceLogs(limit: number = 100): Promise<any[]> {
 	const p = await pool();
-	const allowed = allowedClassIds(user);
-
-	let sql = `
-		SELECT l.id, l.attendance_id, l.student_id, l.tanggal, l.user_id, l.old_status, l.new_status, l.changed_at,
-		       s.nama AS student_name, u.name AS user_name
-		FROM attendance_logs l
-		JOIN students s ON s.id = l.student_id
-		LEFT JOIN users u ON u.id = l.user_id
-	`;
-	const whereClauses: string[] = [];
-	const params: any[] = [];
-
-	if (filters.class_id) {
-		whereClauses.push('s.class_id = ?');
-		params.push(filters.class_id);
-	}
-	if (filters.startDate) {
-		whereClauses.push('l.tanggal >= ?');
-		params.push(filters.startDate);
-	}
-	if (filters.endDate) {
-		whereClauses.push('l.tanggal <= ?');
-		params.push(filters.endDate);
-	}
-	if (allowed !== null) {
-		if (allowed.length === 0) return [];
-		whereClauses.push(`s.class_id IN (${allowed.map(() => '?').join(',')})`);
-		params.push(...allowed);
-	}
-
-	if (whereClauses.length > 0) {
-		sql += ' WHERE ' + whereClauses.join(' AND ');
-	}
-	sql += ' ORDER BY l.changed_at DESC LIMIT 200';
-
-	const [rows] = await p.query<any[]>(sql, params);
+	const numLimit = typeof limit === 'number' ? limit : 100;
+	const [rows] = await p.query<any[]>(
+		`SELECT l.id, l.student_id, s.nama, l.tanggal, l.old_status, l.new_status, u.name AS user_name, l.changed_at
+		 FROM attendance_logs l
+		 JOIN students s ON s.id = l.student_id
+		 LEFT JOIN users u ON u.id = l.user_id
+		 ORDER BY l.changed_at DESC, l.id DESC LIMIT ?`,
+		[numLimit]
+	);
 	return rows.map((r) => ({
 		id: Number(r.id),
 		student_id: Number(r.student_id),
-		student_name: r.student_name,
-		user_name: r.user_name ?? 'Sistem',
+		nama: r.nama ?? '',
 		tanggal: r.tanggal,
 		old_status: r.old_status ?? '',
 		new_status: r.new_status,
-		changed_at: r.changed_at ? new Date(r.changed_at).toISOString() : ''
+		user_name: r.user_name ?? null,
+		changed_at: r.changed_at ? (typeof r.changed_at === 'string' ? r.changed_at : new Date(r.changed_at).toISOString().replace('T', ' ').slice(0, 19)) : ''
 	}));
 }
 
