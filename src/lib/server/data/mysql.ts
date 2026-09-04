@@ -47,9 +47,13 @@ function userRowToUser(row: any): (User & { password_hash: string | null }) | nu
 export async function authFindUserByEmail(email: string): Promise<(User & { password_hash: string | null }) | null> {
 	const p = await pool();
 	const [rows] = await p.query<any[]>(
-		`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id, u.class_id, u.foto_url, u.password_hash,
-              c.nama AS class_name, t.nama AS teacher_nama
-       FROM users u LEFT JOIN classes c ON c.id = u.class_id LEFT JOIN teachers t ON t.id = u.teacher_id
+		`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id,
+              COALESCE(u.class_id, wc.id) AS class_id, u.foto_url, u.password_hash,
+              COALESCE(c.nama, wc.nama) AS class_name, t.nama AS teacher_nama
+       FROM users u
+       LEFT JOIN classes c ON c.id = u.class_id
+       LEFT JOIN teachers t ON t.id = u.teacher_id
+       LEFT JOIN classes wc ON wc.wali_kelas_id = u.teacher_id
        WHERE LOWER(u.email) = LOWER(?)`,
 		[email]
 	);
@@ -59,9 +63,13 @@ export async function authFindUserByEmail(email: string): Promise<(User & { pass
 export async function authFindUserByIdentifier(identifier: string): Promise<(User & { password_hash: string | null }) | null> {
 	const p = await pool();
 	const [rows] = await p.query<any[]>(
-		`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id, u.class_id, u.foto_url, u.password_hash,
-              c.nama AS class_name, t.nama AS teacher_nama
-       FROM users u LEFT JOIN classes c ON c.id = u.class_id LEFT JOIN teachers t ON t.id = u.teacher_id
+		`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id,
+              COALESCE(u.class_id, wc.id) AS class_id, u.foto_url, u.password_hash,
+              COALESCE(c.nama, wc.nama) AS class_name, t.nama AS teacher_nama
+       FROM users u
+       LEFT JOIN classes c ON c.id = u.class_id
+       LEFT JOIN teachers t ON t.id = u.teacher_id
+       LEFT JOIN classes wc ON wc.wali_kelas_id = u.teacher_id
        WHERE LOWER(u.email) = LOWER(?) OR LOWER(u.username) = LOWER(?)`,
 		[identifier, identifier]
 	);
@@ -71,9 +79,13 @@ export async function authFindUserByIdentifier(identifier: string): Promise<(Use
 export async function authGetUserById(userId: number): Promise<User | null> {
 	const p = await pool();
 	const [rows] = await p.query<any[]>(
-		`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id, u.class_id, u.foto_url,
-              c.nama AS class_name, t.nama AS teacher_nama
-       FROM users u LEFT JOIN classes c ON c.id = u.class_id LEFT JOIN teachers t ON t.id = u.teacher_id
+		`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id,
+              COALESCE(u.class_id, wc.id) AS class_id, u.foto_url,
+              COALESCE(c.nama, wc.nama) AS class_name, t.nama AS teacher_nama
+       FROM users u
+       LEFT JOIN classes c ON c.id = u.class_id
+       LEFT JOIN teachers t ON t.id = u.teacher_id
+       LEFT JOIN classes wc ON wc.wali_kelas_id = u.teacher_id
        WHERE u.id = ?`,
 		[userId]
 	);
@@ -118,47 +130,58 @@ export async function authSetProfile(userId: number, name: string, fotoUrl = '')
 	await p.query('UPDATE users SET name=?, foto_url=? WHERE id=?', [name, fotoUrl, userId]);
 }
 
-export async function findUserByTeacherId(teacherId: number): Promise<{ id: number; name: string; role: string; class_id: number | null } | null> {
+export async function findUserByTeacherId(teacherId: number): Promise<(User & { password_hash: string | null }) | null> {
 	const p = await pool();
-	const [rows] = await p.query<any[]>('SELECT id, name, role, class_id FROM users WHERE teacher_id = ?', [teacherId]);
-	if (!rows[0]) return null;
-	return {
-		id: Number(rows[0].id),
-		name: rows[0].name,
-		role: rows[0].role,
-		class_id: rows[0].class_id ? Number(rows[0].class_id) : null
-	};
+	const [rows] = await p.query<any[]>(
+		`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id,
+		        COALESCE(u.class_id, wc.id) AS class_id, u.foto_url, u.password_hash,
+		        COALESCE(c.nama, wc.nama) AS class_name, t.nama AS teacher_nama
+		 FROM users u
+		 LEFT JOIN classes c ON c.id = u.class_id
+		 LEFT JOIN teachers t ON t.id = u.teacher_id
+		 LEFT JOIN classes wc ON wc.wali_kelas_id = u.teacher_id
+		 WHERE u.teacher_id = ?`,
+		[teacherId]
+	);
+	return userRowToUser(rows[0]);
 }
 
-export async function createUserAccount(
-	teacherId: number,
-	username: string,
-	email: string,
-	passwordHash: string,
-	name: string,
-	role: string,
-	classId: number | null
-): Promise<number> {
+export async function createUserAccount(data: {
+	username: string;
+	email: string;
+	password_hash: string | null;
+	name: string;
+	role: string;
+	teacher_id: number;
+	class_id: number | null;
+}): Promise<number> {
 	const p = await pool();
 	const [res] = await p.query<any>(
 		'INSERT INTO users (username, email, password_hash, name, role, teacher_id, class_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-		[username || null, email, passwordHash, name, role, teacherId, classId]
+		[data.username || null, data.email, data.password_hash ?? null, data.name, data.role, data.teacher_id, data.class_id ?? null]
 	);
 	return Number(res.insertId);
 }
 
 export async function updateUserAccount(
 	userId: number,
-	role: string,
-	classId: number | null,
-	passwordHash?: string
+	data: { username?: string; email?: string; role?: string; password_hash?: string | null; class_id?: number | null }
 ): Promise<void> {
 	const p = await pool();
-	if (passwordHash) {
-		await p.query('UPDATE users SET role=?, class_id=?, password_hash=? WHERE id=?', [role, classId, passwordHash, userId]);
-	} else {
-		await p.query('UPDATE users SET role=?, class_id=? WHERE id=?', [role, classId, userId]);
-	}
+	const [curRows] = await p.query<any[]>('SELECT username, email, role, password_hash, class_id FROM users WHERE id = ?', [userId]);
+	const cur = curRows[0];
+	if (!cur) throw new Error('Pengguna tidak ditemukan');
+
+	const username = data.username !== undefined ? (data.username || null) : cur.username;
+	const email = data.email !== undefined ? data.email : cur.email;
+	const role = data.role !== undefined ? data.role : cur.role;
+	const passwordHash = data.password_hash !== undefined ? data.password_hash : cur.password_hash;
+	const classId = data.class_id !== undefined ? data.class_id : cur.class_id;
+
+	await p.query(
+		'UPDATE users SET username=?, email=?, role=?, password_hash=?, class_id=? WHERE id=?',
+		[username, email, role, passwordHash, classId, userId]
+	);
 }
 
 // ================================================================ SCHOOL
@@ -228,8 +251,15 @@ export async function getSetting(key: string, def = ''): Promise<string> {
 // ================================================================ CLASSES
 
 export async function getClasses(user?: User | null): Promise<ClassRow[]> {
+	if (user?.role === 'guru_mapel' && user.teacher_id) {
+		return getClassesForTeacher(user.teacher_id);
+	}
 	const p = await pool();
-	const allowed = user ? allowedClassIds(user) : null;
+	let allowed = user ? allowedClassIds(user) : null;
+	if (user?.role === 'wali_kelas' && (!allowed || allowed.length === 0) && user.teacher_id) {
+		const [wRows] = await p.query<any[]>('SELECT id FROM classes WHERE wali_kelas_id=?', [user.teacher_id]);
+		if (wRows.length > 0) allowed = [Number(wRows[0].id)];
+	}
 
 	let sql = `
 		SELECT c.id, c.nama, c.tingkat, c.tahun_ajaran, c.wali_kelas_id,
@@ -742,21 +772,51 @@ export async function deleteStudent(id: number): Promise<void> {
 	await p.query('DELETE FROM students WHERE id = ?', [id]);
 }
 
-export async function importStudents(
-	classId: number,
-	students: Array<{ nisn?: string; nis?: string; nama: string; jenis_kelamin: 'L' | 'P'; tempat_lahir?: string; tanggal_lahir?: string; alamat?: string; no_hp_ortu?: string }>
-): Promise<number> {
+function normalizeDate(v: string): string {
+	if (!v) return '';
+	const m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+	if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+	return v;
+}
+
+export async function importStudents(class_id: number, rows: any[]): Promise<{ inserted: number; skipped: number }> {
 	const p = await pool();
-	let count = 0;
-	for (const s of students) {
+	const [existingRows] = await p.query<any[]>('SELECT nisn FROM students WHERE class_id = ?', [class_id]);
+	const existing = new Set(existingRows.map((r) => String(r.nisn ?? '').trim()).filter(Boolean));
+
+	let inserted = 0;
+	let skipped = 0;
+	for (const r of rows) {
+		const nisn = String(r.nisn ?? '').trim();
+		const nama = String(r.nama ?? '').trim();
+		if (!nama) continue;
+		if (nisn && existing.has(nisn)) {
+			skipped++;
+			continue;
+		}
+		const statusRaw = String(r.status ?? '').trim();
+		const status = ['aktif', 'pindah', 'lulus', 'keluar'].includes(statusRaw) ? statusRaw : 'aktif';
+		const jk = String(r.jenis_kelamin ?? 'L').trim().toUpperCase() === 'P' ? 'P' : 'L';
 		await p.query(
 			`INSERT INTO students (class_id, nisn, nis, nama, jenis_kelamin, tempat_lahir, tanggal_lahir, alamat, no_hp_ortu, status)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aktif')`,
-			[classId, s.nisn ?? '', s.nis ?? '', s.nama, s.jenis_kelamin, s.tempat_lahir ?? '', s.tanggal_lahir ?? '', s.alamat ?? '', s.no_hp_ortu ?? '']
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			[
+				class_id,
+				nisn,
+				String(r.nis ?? '').trim(),
+				nama,
+				jk,
+				String(r.tempat_lahir ?? '').trim(),
+				normalizeDate(String(r.tanggal_lahir ?? '').trim()),
+				String(r.alamat ?? '').trim(),
+				String(r.no_hp_ortu ?? '').trim(),
+				status
+			]
 		);
-		count++;
+		if (nisn) existing.add(nisn);
+		inserted++;
 	}
-	return count;
+	return { inserted, skipped };
 }
 
 // ================================================================ ATTENDANCE

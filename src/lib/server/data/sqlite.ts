@@ -41,9 +41,14 @@ function userRowToUser(row: any): (User & { password_hash: string | null }) | nu
 export function authFindUserByEmail(email: string): (User & { password_hash: string | null }) | null {
 	const row = db
 		.prepare(
-			`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id, u.class_id, u.foto_url, u.password_hash,
-              c.nama AS class_name, t.nama AS teacher_nama
-       FROM users u LEFT JOIN classes c ON c.id = u.class_id LEFT JOIN teachers t ON t.id = u.teacher_id WHERE lower(u.email) = lower(?)`
+			`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id,
+              COALESCE(u.class_id, wc.id) AS class_id, u.foto_url, u.password_hash,
+              COALESCE(c.nama, wc.nama) AS class_name, t.nama AS teacher_nama
+       FROM users u
+       LEFT JOIN classes c ON c.id = u.class_id
+       LEFT JOIN teachers t ON t.id = u.teacher_id
+       LEFT JOIN classes wc ON wc.wali_kelas_id = u.teacher_id
+       WHERE lower(u.email) = lower(?)`
 		)
 		.get(email) as any;
 	return userRowToUser(row);
@@ -53,9 +58,13 @@ export function authFindUserByEmail(email: string): (User & { password_hash: str
 export function authFindUserByIdentifier(identifier: string): (User & { password_hash: string | null }) | null {
 	const row = db
 		.prepare(
-			`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id, u.class_id, u.foto_url, u.password_hash,
-              c.nama AS class_name, t.nama AS teacher_nama
-       FROM users u LEFT JOIN classes c ON c.id = u.class_id LEFT JOIN teachers t ON t.id = u.teacher_id
+			`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id,
+              COALESCE(u.class_id, wc.id) AS class_id, u.foto_url, u.password_hash,
+              COALESCE(c.nama, wc.nama) AS class_name, t.nama AS teacher_nama
+       FROM users u
+       LEFT JOIN classes c ON c.id = u.class_id
+       LEFT JOIN teachers t ON t.id = u.teacher_id
+       LEFT JOIN classes wc ON wc.wali_kelas_id = u.teacher_id
        WHERE lower(u.email) = lower(?) OR lower(u.username) = lower(?)`
 		)
 		.get(identifier, identifier) as any;
@@ -65,8 +74,14 @@ export function authFindUserByIdentifier(identifier: string): (User & { password
 export function authGetUserById(userId: number): User | null {
 	const row = db
 		.prepare(
-			`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id, u.class_id, u.foto_url, c.nama AS class_name, t.nama AS teacher_nama
-       FROM users u LEFT JOIN classes c ON c.id = u.class_id LEFT JOIN teachers t ON t.id = u.teacher_id WHERE u.id = ?`
+			`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id,
+              COALESCE(u.class_id, wc.id) AS class_id, u.foto_url,
+              COALESCE(c.nama, wc.nama) AS class_name, t.nama AS teacher_nama
+       FROM users u
+       LEFT JOIN classes c ON c.id = u.class_id
+       LEFT JOIN teachers t ON t.id = u.teacher_id
+       LEFT JOIN classes wc ON wc.wali_kelas_id = u.teacher_id
+       WHERE u.id = ?`
 		)
 		.get(userId) as any;
 	const u = userRowToUser(row);
@@ -108,9 +123,14 @@ export function authGetAuthId(_userId: number): string | null {
 export function findUserByTeacherId(teacherId: number): (User & { password_hash: string | null }) | null {
 	const row = db
 		.prepare(
-			`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id, u.class_id, u.foto_url, u.password_hash,
-              c.nama AS class_name, t.nama AS teacher_nama
-       FROM users u LEFT JOIN classes c ON c.id = u.class_id LEFT JOIN teachers t ON t.id = u.teacher_id WHERE u.teacher_id = ?`
+			`SELECT u.id, u.username, u.email, u.name, u.role, u.teacher_id,
+              COALESCE(u.class_id, wc.id) AS class_id, u.foto_url, u.password_hash,
+              COALESCE(c.nama, wc.nama) AS class_name, t.nama AS teacher_nama
+       FROM users u
+       LEFT JOIN classes c ON c.id = u.class_id
+       LEFT JOIN teachers t ON t.id = u.teacher_id
+       LEFT JOIN classes wc ON wc.wali_kelas_id = u.teacher_id
+       WHERE u.teacher_id = ?`
 		)
 		.get(teacherId) as any;
 	return userRowToUser(row);
@@ -133,14 +153,15 @@ export function createUserAccount(data: {
 
 export function updateUserAccount(
 	userId: number,
-	data: { username?: string; email?: string; role?: string; password_hash?: string | null }
+	data: { username?: string; email?: string; role?: string; password_hash?: string | null; class_id?: number | null }
 ) {
-	const cur = db.prepare('SELECT username, email, role, password_hash FROM users WHERE id=?').get(userId) as any;
-	db.prepare('UPDATE users SET username=?, email=?, role=?, password_hash=? WHERE id=?').run(
+	const cur = db.prepare('SELECT username, email, role, password_hash, class_id FROM users WHERE id=?').get(userId) as any;
+	db.prepare('UPDATE users SET username=?, email=?, role=?, password_hash=?, class_id=? WHERE id=?').run(
 		data.username ?? cur?.username ?? null,
 		data.email ?? cur?.email ?? '',
 		data.role ?? cur?.role ?? 'guru_mapel',
 		data.password_hash !== undefined ? data.password_hash : cur?.password_hash ?? null,
+		data.class_id !== undefined ? data.class_id : cur?.class_id ?? null,
 		userId
 	);
 }
@@ -188,9 +209,17 @@ export function getSetting(key: string, def = ''): string {
 // ---------------------------------------------------------------- classes
 
 export function getClasses(user: User | null = null): ClassRow[] {
-	const allowed = user ? allowedClassIds(user) : null;
+	if (user?.role === 'guru_mapel' && user.teacher_id) {
+		return getClassesForTeacher(user.teacher_id);
+	}
+	let allowed = user ? allowedClassIds(user) : null;
+	if (user?.role === 'wali_kelas' && (!allowed || allowed.length === 0) && user.teacher_id) {
+		const row = db.prepare('SELECT id FROM classes WHERE wali_kelas_id=?').get(user.teacher_id) as any;
+		if (row) allowed = [row.id];
+	}
 	let rows: any[];
 	if (allowed) {
+		if (allowed.length === 0) return [];
 		const placeholders = allowed.map(() => '?').join(',');
 		rows = db
 			.prepare(

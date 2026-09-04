@@ -188,12 +188,14 @@ export async function createUserAccount(data: {
 
 export async function updateUserAccount(
 	userId: number,
-	data: { username?: string; email?: string; role?: string; password_hash?: string | null }
+	data: { username?: string; email?: string; role?: string; password_hash?: string | null; class_id?: number | null }
 ) {
 	const patch: any = {};
 	if (data.username !== undefined) patch.username = data.username;
 	if (data.email !== undefined) patch.email = data.email;
 	if (data.role !== undefined) patch.role = data.role;
+	if (data.password_hash !== undefined) patch.password_hash = data.password_hash;
+	if (data.class_id !== undefined) patch.class_id = data.class_id;
 	const { error } = await sb().from('users').update(patch).eq('id', userId);
 	if (error) throw new Error(error.message);
 }
@@ -279,7 +281,14 @@ async function loadClasses(ids?: number[]): Promise<ClassRow[]> {
 }
 
 export async function getClasses(user: User | null = null): Promise<ClassRow[]> {
-	const allowed = user ? allowedClassIds(user) : null;
+	if (user?.role === 'guru_mapel' && user.teacher_id) {
+		return getClassesForTeacher(user.teacher_id);
+	}
+	let allowed = user ? allowedClassIds(user) : null;
+	if (user?.role === 'wali_kelas' && (!allowed || allowed.length === 0) && user.teacher_id) {
+		const { data } = await sb().from('classes').select('id').eq('wali_kelas_id', user.teacher_id).limit(1);
+		if (data && data.length > 0) allowed = [data[0].id];
+	}
 	return loadClasses(allowed ?? undefined);
 }
 

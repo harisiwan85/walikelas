@@ -10,10 +10,12 @@ export const GET: RequestHandler = async (event) => {
 	let subjects = class_id ? await getSubjectsForClass(class_id) : await getSubjects();
 
 	// Jika pengguna adalah guru mapel atau guru yang memiliki mapel ampuannya, hanya tampilkan mapel yang diampunya
-	if (user.role === 'guru_mapel' && user.teacher_id) {
+	if ((user.role === 'guru_mapel' || user.role === 'wali_kelas') && user.teacher_id) {
 		const mine = await getTeacherSubjects(user.teacher_id);
-		const mineIds = new Set(mine.map((s) => s.id));
-		subjects = subjects.filter((s) => mineIds.has(s.id));
+		if (mine.length > 0) {
+			const mineIds = new Set(mine.map((s) => s.id));
+			subjects = subjects.filter((s) => mineIds.has(s.id));
+		}
 	}
 
 	return json(subjects);

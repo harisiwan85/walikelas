@@ -11,6 +11,8 @@ export const GET: RequestHandler = async (event) => {
 			name: user.name,
 			email: user.email,
 			role: user.role,
+			teacher_id: user.teacher_id,
+			class_id: user.class_id,
 			foto_url: user.foto_url,
 			class_name: user.class_name
 		}
