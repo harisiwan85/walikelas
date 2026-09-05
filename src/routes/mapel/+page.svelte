@@ -82,6 +82,31 @@
 			}
 		}
 
+	let selected = $state<Set<number>>(new Set());
+	let bulkBusy = $state(false);
+
+	function toggleSelect(id: number) {
+		const next = new Set(selected);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		selected = next;
+	}
+
+	function toggleSelectAll() {
+		const allInPage = paginated.length > 0 && paginated.every((s) => selected.has(s.id));
+		const next = new Set(selected);
+		if (allInPage) {
+			paginated.forEach((s) => next.delete(s.id));
+		} else {
+			paginated.forEach((s) => next.add(s.id));
+		}
+		selected = next;
+	}
+
+	function selectAllFiltered() {
+		selected = new Set(subjects.map((s) => s.id));
+	}
+
 	async function hapus(s: Subject) {
 		if (!confirm(`Hapus mata pelajaran ${s.nama}?`)) return;
 		try {
@@ -90,6 +115,22 @@
 			await refresh();
 		} catch (e: any) {
 			toast(e.message, 'error');
+		}
+	}
+
+	async function bulkDelete() {
+		if (!confirm(`Hapus ${selected.size} mata pelajaran terpilih?`)) return;
+		bulkBusy = true;
+		try {
+			const ids = Array.from(selected);
+			await Promise.all(ids.map((id) => api(`/api/subjects/${id}`, { method: 'DELETE' })));
+			toast(`${ids.length} mata pelajaran berhasil dihapus`);
+			selected = new Set();
+			await refresh();
+		} catch (e: any) {
+			toast(e.message, 'error');
+		} finally {
+			bulkBusy = false;
 		}
 	}
 </script>
@@ -105,17 +146,35 @@
 	<div class="card overflow-hidden">
 		<table class="data-table">
 			<thead>
-				<tr>						<th class="text-center">No</th>
-						<th>Kode</th>
-						<th>Nama Pelajaran</th>
-						<th>Guru Pengampu</th>
-						<th>Kelas Diajar</th>
-						<th class="text-right">Aksi</th>
+				<tr>
+					<th class="w-10 text-center">
+						<input
+							type="checkbox"
+							class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+							checked={paginated.length > 0 && paginated.every((s) => selected.has(s.id))}
+							onchange={toggleSelectAll}
+							title="Centang semua di halaman ini"
+						/>
+					</th>
+					<th class="text-center">No</th>
+					<th>Kode</th>
+					<th>Nama Pelajaran</th>
+					<th>Guru Pengampu</th>
+					<th>Kelas Diajar</th>
+					<th class="text-right">Aksi</th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each paginated as s, i}
-					<tr>
+					<tr class={selected.has(s.id) ? 'bg-indigo-50/40' : ''}>
+						<td class="text-center">
+							<input
+								type="checkbox"
+								class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+								checked={selected.has(s.id)}
+								onchange={() => toggleSelect(s.id)}
+							/>
+						</td>
 						<td class="text-center text-slate-400">{(page - 1) * pageSize + i + 1}</td>
 						<td class="font-mono text-xs text-slate-500">{s.kode || '-'}</td>
 						<td class="font-medium">{s.nama}</td>
@@ -133,12 +192,33 @@
 						</td>
 					</tr>
 				{:else}
-					<tr><td colspan="6" class="text-center py-8 text-slate-400">Belum ada mata pelajaran</td></tr>
+					<tr><td colspan="7" class="text-center py-8 text-slate-400">Belum ada mata pelajaran</td></tr>
 				{/each}
 			</tbody>
 		</table>
-		<Pagination bind:currentPage={page} bind:pageSize totalItems={subjects.length} />
+		<Pagination currentPage={page} {pageSize} totalItems={subjects.length} onPageChange={(p) => (page = p)} onPageSizeChange={(s) => (pageSize = s)} />
 	</div>
+
+	{#if selected.size > 0}
+		<div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex flex-wrap items-center gap-4 text-sm animate-in fade-in duration-200 border border-slate-700">
+			<div class="flex items-center gap-2 font-medium">
+				<span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+				<span>{selected.size} mata pelajaran terpilih</span>
+			</div>
+			{#if subjects.length > paginated.length && selected.size < subjects.length}
+				<button class="text-xs text-indigo-300 hover:text-white underline cursor-pointer" onclick={selectAllFiltered}>
+					Pilih semua {subjects.length} mata pelajaran
+				</button>
+			{/if}
+			<div class="h-4 w-px bg-slate-700"></div>
+			<button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer transition disabled:opacity-50" onclick={bulkDelete} disabled={bulkBusy}>
+				<Icon name="trash" class="w-3.5 h-3.5" /> {bulkBusy ? 'Memproses...' : 'Hapus Terpilih'}
+			</button>
+			<button class="text-xs text-slate-400 hover:text-white cursor-pointer ml-1" onclick={() => (selected = new Set())} disabled={bulkBusy}>
+				Batal
+			</button>
+		</div>
+	{/if}
 </div>
 
 <Modal open={showModal} title={editing ? 'Edit Mata Pelajaran' : 'Tambah Mata Pelajaran'} onclose={() => (showModal = false)}>

@@ -3,11 +3,13 @@
 
 	let {
 		totalItems = 0,
-		currentPage = $bindable(1),
-		pageSize = $bindable(10),
+		currentPage = 1,
+		pageSize = 10,
 		pageSizeOptions = [10, 25, 50, 100],
 		showPageSize = true,
-		compact = false
+		compact = false,
+		onPageChange,
+		onPageSizeChange
 	}: {
 		totalItems: number;
 		currentPage?: number;
@@ -15,25 +17,25 @@
 		pageSizeOptions?: number[];
 		showPageSize?: boolean;
 		compact?: boolean;
+		onPageChange?: (page: number) => void;
+		onPageSizeChange?: (size: number) => void;
 	} = $props();
 
 	let totalPages = $derived(Math.max(1, Math.ceil(totalItems / (pageSize || 10))));
 	let startItem = $derived(totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1);
 	let endItem = $derived(Math.min(totalItems, currentPage * pageSize));
 
-	// Jaga agar currentPage selalu dalam rentang valid saat data atau pageSize berubah
-	$effect(() => {
-		if (currentPage > totalPages) {
-			currentPage = totalPages;
-		} else if (currentPage < 1) {
-			currentPage = 1;
-		}
-	});
-
 	function goTo(p: number) {
-		if (p >= 1 && p <= totalPages && p !== currentPage) {
-			currentPage = p;
+		const target = Math.max(1, Math.min(totalPages, p));
+		if (target !== currentPage) {
+			onPageChange?.(target);
 		}
+	}
+
+	function handlePageSize(e: Event) {
+		const val = Number((e.target as HTMLSelectElement).value) || 10;
+		onPageSizeChange?.(val);
+		onPageChange?.(1);
 	}
 
 	// Buat daftar angka halaman dengan elipsis cerdas
@@ -71,8 +73,8 @@
 				<div class="flex items-center gap-1.5 pl-2 border-l border-slate-200">
 					<span class="text-xs text-slate-400">Tampilkan:</span>
 					<select
-						bind:value={pageSize}
-						onchange={() => (currentPage = 1)}
+						value={pageSize}
+						onchange={handlePageSize}
 						class="text-xs font-medium py-1 px-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 hover:bg-white focus:ring-1 focus:ring-indigo-500 cursor-pointer"
 					>
 						{#each pageSizeOptions as opt}

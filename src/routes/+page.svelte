@@ -198,7 +198,7 @@
 					{/each}
 				</div>
 				{#if summary.alerts.length > alertPageSize}
-					<Pagination bind:currentPage={alertPage} pageSize={alertPageSize} totalItems={summary.alerts.length} compact={true} showPageSize={false} />
+					<Pagination currentPage={alertPage} onPageChange={(p) => (alertPage = p)} pageSize={alertPageSize} totalItems={summary.alerts.length} compact={true} showPageSize={false} />
 				{/if}
 			</div>
 		</div>
@@ -280,7 +280,7 @@
 				</table>
 			</div>
 			{#if summary.hariIniAbsen.length > absenPageSize}
-				<Pagination bind:currentPage={absenPage} pageSize={absenPageSize} totalItems={summary.hariIniAbsen.length} compact={true} showPageSize={false} />
+				<Pagination currentPage={absenPage} onPageChange={(p) => (absenPage = p)} pageSize={absenPageSize} totalItems={summary.hariIniAbsen.length} compact={true} showPageSize={false} />
 			{/if}
 		</div>
 	</div>

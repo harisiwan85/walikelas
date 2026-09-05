@@ -207,7 +207,7 @@
 				</tbody>
 			</table>
 			{#if periods.length > periodPageSize}
-				<Pagination bind:currentPage={periodPage} pageSize={periodPageSize} totalItems={periods.length} compact={true} showPageSize={false} />
+				<Pagination currentPage={periodPage} pageSize={periodPageSize} totalItems={periods.length} compact={true} showPageSize={false} onPageChange={(p) => (periodPage = p)} />
 			{/if}
 		</div>
 

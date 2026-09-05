@@ -236,7 +236,7 @@
 				<span class="inline-flex items-center gap-1"><span class="inline-flex w-5 h-5 items-center justify-center rounded text-[10px] font-bold {cellCls.terlambat}">T</span> Terlambat</span>
 				<span class="ml-auto">- belum diinput</span>
 			</div>
-			<Pagination bind:currentPage={matrixPage} bind:pageSize={matrixPageSize} totalItems={matrix.rows.length} pageSizeOptions={[10, 25, 50, 100]} />
+			<Pagination currentPage={matrixPage} pageSize={matrixPageSize} totalItems={matrix.rows.length} pageSizeOptions={[10, 25, 50, 100]} onPageChange={(p) => (matrixPage = p)} onPageSizeChange={(s) => (matrixPageSize = s)} />
 		</div>
 	{:else}
 		<div class="grid lg:grid-cols-3 gap-6">
@@ -322,7 +322,7 @@
 					</tbody>
 				</table>
 			</div>
-			<Pagination bind:currentPage={summaryPage} bind:pageSize={summaryPageSize} totalItems={rows.length} pageSizeOptions={[10, 25, 50, 100]} />
+			<Pagination currentPage={summaryPage} pageSize={summaryPageSize} totalItems={rows.length} pageSizeOptions={[10, 25, 50, 100]} onPageChange={(p) => (summaryPage = p)} onPageSizeChange={(s) => (summaryPageSize = s)} />
 		</div>
 	{/if}
 </div>

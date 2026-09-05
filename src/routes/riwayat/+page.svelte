@@ -125,7 +125,7 @@
 					</tbody>
 				</table>
 			</div>
-			<Pagination bind:currentPage={historyPage} bind:pageSize={historyPageSize} totalItems={history.length} />
+			<Pagination currentPage={historyPage} pageSize={historyPageSize} totalItems={history.length} onPageChange={(p) => (historyPage = p)} onPageSizeChange={(s) => (historyPageSize = s)} />
 		</div>
 	{:else}
 		<div class="card overflow-hidden">
@@ -165,7 +165,7 @@
 					</tbody>
 				</table>
 			</div>
-			<Pagination bind:currentPage={logsPage} bind:pageSize={logsPageSize} totalItems={logs.length} />
+			<Pagination currentPage={logsPage} pageSize={logsPageSize} totalItems={logs.length} onPageChange={(p) => (logsPage = p)} onPageSizeChange={(s) => (logsPageSize = s)} />
 		</div>
 	{/if}
 </div>

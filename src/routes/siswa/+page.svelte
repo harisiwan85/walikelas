@@ -40,10 +40,14 @@
 		})
 	);
 
-	// Reset ke halaman 1 saat filter pencarian berubah
+	let selected = $state<Set<number>>(new Set());
+	let bulkBusy = $state(false);
+
+	// Reset ke halaman 1 dan bersihkan pilihan saat filter pencarian berubah
 	$effect(() => {
 		const _ = [q, filterClass, filterStatus];
 		page = 1;
+		selected = new Set();
 	});
 
 	let paginated = $derived(filtered.slice((page - 1) * pageSize, page * pageSize));
@@ -113,6 +117,61 @@
 			importing = false;
 		}
 	}
+
+	function toggleSelect(id: number) {
+		const next = new Set(selected);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		selected = next;
+	}
+
+	function toggleSelectAll() {
+		const allInPage = paginated.length > 0 && paginated.every((s) => selected.has(s.id));
+		const next = new Set(selected);
+		if (allInPage) {
+			paginated.forEach((s) => next.delete(s.id));
+		} else {
+			paginated.forEach((s) => next.add(s.id));
+		}
+		selected = next;
+	}
+
+	function selectAllFiltered() {
+		selected = new Set(filtered.map((s) => s.id));
+	}
+
+	async function bulkDelete() {
+		if (!confirm(`Hapus ${selected.size} siswa terpilih? Riwayat absensi siswa tersebut akan ikut terhapus.`)) return;
+		bulkBusy = true;
+		try {
+			const ids = Array.from(selected);
+			await Promise.all(ids.map((id) => api(`/api/students/${id}`, { method: 'DELETE' })));
+			toast(`${ids.length} siswa berhasil dihapus`);
+			selected = new Set();
+			await refresh();
+		} catch (e: any) {
+			toast(e.message, 'error');
+		} finally {
+			bulkBusy = false;
+		}
+	}
+
+	async function bulkUpdateStatus(newStatus: StudentStatus) {
+		if (!newStatus) return;
+		if (!confirm(`Ubah status ${selected.size} siswa terpilih menjadi "${newStatus}"?`)) return;
+		bulkBusy = true;
+		try {
+			const ids = Array.from(selected);
+			await Promise.all(ids.map((id) => api(`/api/students/${id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) })));
+			toast(`Status ${ids.length} siswa diubah menjadi ${newStatus}`);
+			selected = new Set();
+			await refresh();
+		} catch (e: any) {
+			toast(e.message, 'error');
+		} finally {
+			bulkBusy = false;
+		}
+	}
 </script>
 
 <svelte:head><title>Data Siswa — Aplikasi Wali Kelas</title></svelte:head>
@@ -153,6 +212,17 @@
 			<table class="data-table">
 				<thead>
 					<tr>
+						{#if canManage}
+							<th class="w-10 text-center">
+								<input
+									type="checkbox"
+									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+									checked={paginated.length > 0 && paginated.every((s) => selected.has(s.id))}
+									onchange={toggleSelectAll}
+									title="Centang semua di halaman ini"
+								/>
+							</th>
+						{/if}
 						<th>No</th>
 						<th>Nama</th>
 						<th>Kelas</th>
@@ -165,7 +235,17 @@
 				</thead>
 				<tbody>
 					{#each paginated as s, i}
-						<tr>
+						<tr class={selected.has(s.id) ? 'bg-indigo-50/40' : ''}>
+							{#if canManage}
+								<td class="text-center">
+									<input
+										type="checkbox"
+										class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+										checked={selected.has(s.id)}
+										onchange={() => toggleSelect(s.id)}
+									/>
+								</td>
+							{/if}
 							<td class="text-slate-400">{(page - 1) * pageSize + i + 1}</td>
 							<td class="font-medium">{s.nama}</td>
 							<td>{s.class_name}</td>
@@ -181,13 +261,52 @@
 						{/if}
 						</tr>
 					{:else}
-						<tr><td colspan="{canManage ? 8 : 7}" class="text-center py-8 text-slate-400">Tidak ada data siswa</td></tr>
+						<tr><td colspan="{canManage ? 9 : 7}" class="text-center py-8 text-slate-400">Tidak ada data siswa</td></tr>
 					{/each}
 				</tbody>
 			</table>
 		</div>
-		<Pagination bind:currentPage={page} bind:pageSize totalItems={filtered.length} />
+		<Pagination currentPage={page} {pageSize} totalItems={filtered.length} onPageChange={(p) => (page = p)} onPageSizeChange={(s) => (pageSize = s)} />
 	</div>
+
+	{#if canManage && selected.size > 0}
+		<div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex flex-wrap items-center gap-4 text-sm animate-in fade-in duration-200 border border-slate-700">
+			<div class="flex items-center gap-2 font-medium">
+				<span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+				<span>{selected.size} siswa terpilih</span>
+			</div>
+			{#if filtered.length > paginated.length && selected.size < filtered.length}
+				<button class="text-xs text-indigo-300 hover:text-white underline cursor-pointer" onclick={selectAllFiltered}>
+					Pilih semua {filtered.length} siswa
+				</button>
+			{/if}
+			<div class="h-4 w-px bg-slate-700"></div>
+			<div class="flex items-center gap-2">
+				<span class="text-xs text-slate-400">Ubah status:</span>
+				<select
+					class="text-xs bg-slate-800 border border-slate-700 text-white rounded-lg py-1 px-2 focus:ring-1 focus:ring-indigo-500"
+					onchange={(e) => {
+						const val = (e.target as HTMLSelectElement).value;
+						if (val) bulkUpdateStatus(val as StudentStatus);
+						(e.target as HTMLSelectElement).value = '';
+					}}
+					disabled={bulkBusy}
+				>
+					<option value="">Pilih status...</option>
+					<option value="aktif">Aktif</option>
+					<option value="pindah">Pindah</option>
+					<option value="lulus">Lulus</option>
+					<option value="keluar">Keluar</option>
+				</select>
+			</div>
+			<button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer transition disabled:opacity-50" onclick={bulkDelete} disabled={bulkBusy}>
+				<Icon name="trash" class="w-3.5 h-3.5" /> {bulkBusy ? 'Memproses...' : 'Hapus Terpilih'}
+			</button>
+			<button class="text-xs text-slate-400 hover:text-white cursor-pointer ml-1" onclick={() => (selected = new Set())} disabled={bulkBusy}>
+				Batal
+			</button>
+		</div>
+	{/if}
 </div>
 
 <Modal open={showModal} title={editing ? 'Edit Siswa' : 'Tambah Siswa'} onclose={() => (showModal = false)}>

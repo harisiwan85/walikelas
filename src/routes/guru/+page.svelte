@@ -40,9 +40,13 @@
 		teachers.filter((t) => !q || t.nama.toLowerCase().includes(q.toLowerCase()) || t.nip.includes(q) || t.kode.toLowerCase().includes(q.toLowerCase()))
 	);
 
+	let selected = $state<Set<number>>(new Set());
+	let bulkBusy = $state(false);
+
 	$effect(() => {
 		const _ = q;
 		page = 1;
+		selected = new Set();
 	});
 
 	let paginated = $derived(filtered.slice((page - 1) * pageSize, page * pageSize));
@@ -105,6 +109,44 @@
 			await refresh();
 		} catch (e: any) {
 			toast(e.message, 'error');
+		}
+	}
+
+	function toggleSelect(id: number) {
+		const next = new Set(selected);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		selected = next;
+	}
+
+	function toggleSelectAll() {
+		const allInPage = paginated.length > 0 && paginated.every((t) => selected.has(t.id));
+		const next = new Set(selected);
+		if (allInPage) {
+			paginated.forEach((t) => next.delete(t.id));
+		} else {
+			paginated.forEach((t) => next.add(t.id));
+		}
+		selected = next;
+	}
+
+	function selectAllFiltered() {
+		selected = new Set(filtered.map((t) => t.id));
+	}
+
+	async function bulkDelete() {
+		if (!confirm(`Hapus ${selected.size} guru terpilih?`)) return;
+		bulkBusy = true;
+		try {
+			const ids = Array.from(selected);
+			await Promise.all(ids.map((id) => api(`/api/teachers/${id}`, { method: 'DELETE' })));
+			toast(`${ids.length} guru berhasil dihapus`);
+			selected = new Set();
+			await refresh();
+		} catch (e: any) {
+			toast(e.message, 'error');
+		} finally {
+			bulkBusy = false;
 		}
 	}
 
@@ -196,6 +238,15 @@
 			<table class="data-table">
 					<thead>
 						<tr>
+							<th class="w-10 text-center">
+								<input
+									type="checkbox"
+									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+									checked={paginated.length > 0 && paginated.every((t) => selected.has(t.id))}
+									onchange={toggleSelectAll}
+									title="Centang semua di halaman ini"
+								/>
+							</th>
 							<th class="text-center">No</th>
 							<th>Foto</th>
 							<th>Nama</th>
@@ -208,7 +259,15 @@
 					</thead>
 					<tbody>
 						{#each paginated as t, i}
-							<tr>
+							<tr class={selected.has(t.id) ? 'bg-indigo-50/40' : ''}>
+								<td class="text-center">
+									<input
+										type="checkbox"
+										class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+										checked={selected.has(t.id)}
+										onchange={() => toggleSelect(t.id)}
+									/>
+								</td>
 								<td class="text-center text-slate-400">{(page - 1) * pageSize + i + 1}</td>
 								<td>
 									<div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-slate-200">
@@ -241,13 +300,34 @@
 								</td>
 							</tr>
 						{:else}
-							<tr><td colspan="8" class="text-center py-8 text-slate-400">Tidak ada data guru</td></tr>
+							<tr><td colspan="9" class="text-center py-8 text-slate-400">Tidak ada data guru</td></tr>
 						{/each}
 					</tbody>
 			</table>
 		</div>
-		<Pagination bind:currentPage={page} bind:pageSize totalItems={filtered.length} />
+		<Pagination currentPage={page} {pageSize} totalItems={filtered.length} onPageChange={(p) => (page = p)} onPageSizeChange={(s) => (pageSize = s)} />
 	</div>
+
+	{#if selected.size > 0}
+		<div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex flex-wrap items-center gap-4 text-sm animate-in fade-in duration-200 border border-slate-700">
+			<div class="flex items-center gap-2 font-medium">
+				<span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+				<span>{selected.size} guru terpilih</span>
+			</div>
+			{#if filtered.length > paginated.length && selected.size < filtered.length}
+				<button class="text-xs text-indigo-300 hover:text-white underline cursor-pointer" onclick={selectAllFiltered}>
+					Pilih semua {filtered.length} guru
+				</button>
+			{/if}
+			<div class="h-4 w-px bg-slate-700"></div>
+			<button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer transition disabled:opacity-50" onclick={bulkDelete} disabled={bulkBusy}>
+				<Icon name="trash" class="w-3.5 h-3.5" /> {bulkBusy ? 'Memproses...' : 'Hapus Terpilih'}
+			</button>
+			<button class="text-xs text-slate-400 hover:text-white cursor-pointer ml-1" onclick={() => (selected = new Set())} disabled={bulkBusy}>
+				Batal
+			</button>
+		</div>
+	{/if}
 </div>
 
 	<Modal open={showModal} title={editing ? 'Edit Guru' : 'Tambah Guru'} onclose={() => (showModal = false)}>
