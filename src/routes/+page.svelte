@@ -61,15 +61,6 @@
 			note: `${pct(summary.alpa)}% siswa`
 		},
 		{
-			label: 'Terlambat',
-			value: summary.terlambat,
-			icon: 'clock',
-			grad: 'from-orange-400 to-amber-600',
-			shadow: 'shadow-orange-500/30',
-			bar: pct(summary.terlambat),
-			note: `${pct(summary.terlambat)}% siswa`
-		},
-		{
 			label: 'Belum Dicatat',
 			value: summary.belum_dicatat,
 			icon: 'info',
@@ -110,7 +101,7 @@
 	{/if}
 
 	<!-- Kartu statistik -->
-	<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+	<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
 		{#each statCards as c}
 			<div
 				class={`rounded-2xl p-4 text-white bg-gradient-to-br ${c.grad} shadow-lg ${c.shadow} transition-transform hover:-translate-y-0.5`}
